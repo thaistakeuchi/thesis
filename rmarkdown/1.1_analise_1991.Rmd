@@ -1,0 +1,529 @@
+---
+title: "Análise 1991"
+author: "Thais Takeuchi"
+date: "2024-08-31"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+rm(list = (ls()))
+
+
+### Load Packages (and install packages if needed)
+load.lib <- c("data.table","foreign","stargazer","devtools","stringi", "srvyr", "survey","tidyverse","gtools", "remote","installr","microdadosBrasil","ggplot2","viridis","hrbrthemes","WDI","dplyr", "arrow", "readxl","rio","writexl","dineq", "basedosdados", "httr", "haven", "openxlsx", "fixest","car")
+
+### Instaling and loading packages
+install.lib <- load.lib[!load.lib %in% installed.packages()]
+for(lib in install.lib) install.packages(lib,dependencies=TRUE)
+sapply(load.lib, require, character=TRUE)
+```
+
+```{r}
+## Country code mapping
+country_code_mapping <- c(
+  "Bolivia" = "BOL", "Peru" = "PER", "Germany" = "DEU", "Japan" = "JPN",
+  "Paraguay" = "PRY", "Portugal" = "PRT", "Italy" = "ITA",
+  "Spain" = "ESP", "India" = "IND", "United States" = "USA", "Colombia" = "COL",
+  "Uruguay" = "URY", "Venezuela" = "VEN", "China" = "CHN", "Guyana" = "GUY",
+  "France" = "FRA", "Argentina" = "ARG", "Chile" = "CHL", "Hungary" = "HUN",
+  "Lebanon" = "LBN", "Austria" = "AUT", "Costa Rica" = "CRI",
+  "Russian Federation" = "RUS", "Romania" = "ROU", "Turkey" = "TUR",
+  "Czechoslovakia" = "CZE", "Poland" = "POL", "Cuba" = "CUB", "Switzerland" = "CHE",
+  "Nicaragua" = "NIC", "Panama" = "PAN", "Belgium" = "BEL", "Egypt" = "EGY",
+  "United Kingdom" = "GBR", "Greece" = "GRC", "Guatemala" = "GTM",
+  "Syria" = "SYR", "Korea" = "KOR", "Netherlands" = "NLD",
+  "Yugoslavia" = "YUG", "Pakistan" = "PAK", "Ireland" = "IRL",
+  "Ecuador" = "ECU", "Israel" = "ISR", "Denmark" = "DNK",
+  "Australia" = "AUS", "Mexico" = "MEX", "French Guiana" = "GUF",
+  "Suriname" = "SUR", "Sweden" = "SWE", "Honduras" = "HND",
+  "Canada" = "CAN", "El Salvador" = "SLV", "Finland" = "FIN",
+  "Dominican Republic" = "DOM", "Bulgaria" = "BGR", "Norway" = "NOR"
+)
+
+```
+
+
+## Carrega base 1991 (fonte: Centro de Estudos da Metrópole)
+
+```{r base 1991 centro estudos metropole, comment=FALSE}
+# transforma base sav em dta
+# censo_1991_raw <- read_sav("E:/Thais/Tese_Mestrado/IBGE_1991/Censo 1991/censo_1991_25_percent.sav")
+# censo_1991_raw$V0311 <- as.integer(censo_1991_raw$V0311)
+# censo_1991_raw$V0322 <- as.integer(censo_1991_raw$V0322)
+# censo_1991_raw$V3614 <- as.integer(censo_1991_raw$V3614)
+# 
+# df <- write_dta(censo_1991_raw, "E:/Thais/Tese_Mestrado/censo_1991/censo_1991_raw.dta")
+# df <- read_dta("E:/Thais/Tese_Mestrado/censo_1991/censo_pessoas_1991_sem_comp.dta")
+# write_parquet(df, "E:/Thais/Tese_Mestrado/censo_1991/censo_pessoas_1991_sem_comp.parquet")
+# df <- read_parquet("E:/Thais/Tese_Mestrado/censo_1991/censo_pessoas_1991_sem_comp.parquet")
+
+# df <- read_dta("E:/Thais/Tese_Mestrado/censo_1991/censo_pessoas_1991_filtrado_nao_comp.dta")
+# 
+# write_parquet(df, "E:/Thais/Tese_Mestrado/censo_1991/censo_pessoas_1991_filtrado_nao_comp.parquet")
+
+df <- read_parquet("E:/Thais/Tese_Mestrado/censo_1991/censo_pessoas_1991_filtrado_nao_comp.parquet")
+
+### Cultural proxies----
+
+## Home country divorce rate
+home_country_div_rate_1990 <- read_xlsx("E:/Thais/Tese_Mestrado/tese_bases/home_country_div_rate/home_country_div_rate_1990.xlsx")
+
+### Country of Origin Variables, measured in the year 1991/1990 except where otherwise noted (paper)----
+
+# ## GDP per capita
+gdp_pc_1991 <- read_xlsx("E:/Thais/Tese_Mestrado/tese_bases/gdp_per_capita/gdp_pc_1991.xlsx")
+
+## Average Female Age at First Marriage
+mean_age_fmarr_1991 <- read_xlsx("E:/Thais/Tese_Mestrado/tese_bases/age_first_marriage/mean_age_fmarr_1991.xlsx")
+
+## Total fertility rate
+fertility_rate_1991 <- read_xlsx("E:/Thais/Tese_Mestrado/tese_bases/fertility_rate/fertility_rate_1991.xlsx")
+
+## Remarriage rate
+
+## Proportion: weekly  church attendance and catholics
+church_catholic_1995_1998 <- read_xlsx("E:/Thais/Tese_Mestrado/tese_bases/church/church_catholic_1995_1998.xlsx") |> 
+  dplyr::mutate(pais_nascim = dplyr::recode(pais_nascim, !!!country_code_mapping))
+  # dplyr::filter(pais_nascim %in% country_code_mapping)
+
+
+##### ff2009 (idea)
+## LFP 2000
+#lfp <- read_xlsx("E:/Thais/Tese_Mestrado/tese_bases/lfp/lfp_final.xlsx")
+```
+
+## MANIPULAÇÕES
+
+```{r manipula}
+# Mantendo cópia das bases
+cp1991_nc_copy <- df
+
+# Renomeando países de origem
+df <- df %>% rename(pais_nascim = V0316)
+cp1991_nc_copy <- cp1991_nc_copy %>% rename(pais_nascim = V0316)
+
+setDT(df, cp1991_nc_copy)
+
+
+df <- cp1991_nc_copy %>%
+  mutate(pais_nascim = case_when(
+    pais_nascim == 30 ~ "ARG",
+    pais_nascim == 31 ~ "BOL",
+    pais_nascim == 32 ~ "CAN",
+    pais_nascim == 33 ~ "CHL",
+    pais_nascim == 34 ~ "COL",
+    pais_nascim == 35 ~ "CRI",
+    pais_nascim == 36 ~ "CUB",
+    pais_nascim == 37 ~ "ECU",
+    pais_nascim == 38 ~ "USA",
+    pais_nascim == 39 ~ "GTM",
+    pais_nascim == 40 ~ "GUY",
+    pais_nascim == 41 ~ "GUF",
+    pais_nascim == 42 ~ "HTI",
+    pais_nascim == 43 ~ "HND",
+    pais_nascim == 44 ~ "BLZ",
+    pais_nascim == 45 ~ "JAM",
+    pais_nascim == 46 ~ "MEX",
+    pais_nascim == 47 ~ "NIC",
+    pais_nascim == 48 ~ "PAN",
+    pais_nascim == 49 ~ "PRY",
+    pais_nascim == 50 ~ "PER",
+    pais_nascim == 51 ~ "DOM",
+    pais_nascim == 52 ~ "SLV",
+    pais_nascim == 53 ~ "SUR",
+    pais_nascim == 54 ~ "URY",
+    pais_nascim == 55 ~ "VEN",
+    pais_nascim == 56 ~ "OTH_AM",
+    pais_nascim == 58 ~ "DEU",
+    pais_nascim == 59 ~ "AUT",
+    pais_nascim == 60 ~ "BEL",
+    pais_nascim == 61 ~ "BGR",
+    pais_nascim == 62 ~ "DNK",
+    pais_nascim == 63 ~ "ESP",
+    pais_nascim == 64 ~ "FIN",
+    pais_nascim == 65 ~ "FRA",
+    pais_nascim == 66 ~ "GBR",
+    pais_nascim == 67 ~ "GRC",
+    pais_nascim == 68 ~ "NLD",
+    pais_nascim == 69 ~ "HUN",
+    pais_nascim == 70 ~ "IRL",
+    pais_nascim == 71 ~ "ITA",
+    pais_nascim == 72 ~ "YUG",
+    pais_nascim == 73 ~ "NOR",
+    pais_nascim == 74 ~ "POL",
+    pais_nascim == 75 ~ "PRT",
+    pais_nascim == 76 ~ "ROU",
+    pais_nascim == 77 ~ "SWE",
+    pais_nascim == 78 ~ "CHE",
+    pais_nascim == 79 ~ "CZE",
+    pais_nascim == 80 ~ "RUS",
+    pais_nascim == 81 ~ "OTH_EUR",
+    pais_nascim == 82 ~ "AGO",
+    pais_nascim == 83 ~ "EGY",
+    pais_nascim == 84 ~ "MOZ",
+    pais_nascim == 85 ~ "OTH_AFR",
+    pais_nascim == 86 ~ "CHN",
+    pais_nascim == 87 ~ "TWN",
+    pais_nascim == 88 ~ "KOR",
+    pais_nascim == 89 ~ "IND",
+    pais_nascim == 90 ~ "ISR",
+    pais_nascim == 91 ~ "JPN",
+    pais_nascim == 92 ~ "LBN",
+    pais_nascim == 93 ~ "PAK",
+    pais_nascim == 94 ~ "SYR",
+    pais_nascim == 95 ~ "TUR",
+    pais_nascim == 96 ~ "OTH_ASIA",
+    pais_nascim == 97 ~ "AUS",
+    pais_nascim == 98 ~ "OTH_OCE",
+    pais_nascim == 99 ~ "NO_SPEC",
+    TRUE ~ as.character(pais_nascim)
+  ))
+```
+
+
+
+```{r manipula 2}
+# transform metropolitan area variable to a factor variable
+df$V7003 <- as.factor(df$V7003)
+
+df$ano <- 1991
+
+df <- df %>%
+  mutate(
+    ano_nasc = ano - V3072,
+    rm = ifelse(V7003 != 0, 1, 0), #metropolitan region
+    imm = ifelse((V3152 - ano_nasc <= 5) & rm == 1, 1, 0),
+    imm_div = ifelse(imm == 1
+                     & V0333 == 7, 1, 0),
+  )
+
+df <- df %>% 
+  filter(V3342 != 5) %>% #tira solteiros
+  filter(V0333 != 8) %>% #tira viuvos
+  filter(V0333 != 9) #tira nao declarado
+  
+# se imm_div e NA entao coloca zero
+# df$imm_div[is.na(df$imm_div)] <- 0
+
+
+df <- df %>%
+  mutate(
+    imm_homem = ifelse(V0301 == 1
+                       & imm == 1, 1, 0),
+    imm_alf = ifelse(imm == 1 & (V0323 == 1), 1, 0), 
+    imm_fund_completo = ifelse(imm == 1
+                               & (V0328 == 3 | V0328 == 4), 1, 0), 
+    imm_em_completo = ifelse(imm == 1
+                             & (V0328 == 5 | V0328 == 6), 1, 0), 
+    imm_superior_completo = ifelse(imm == 1
+                                   & (V0328 == 7), 1, 0), 
+    imm_mestr_doc = ifelse(imm == 1
+                           & (V0328 == 8), 1, 0),
+    filho_mora_domicilio = ifelse(V0335 != 0, 1, 0),
+    imm_mulher1filho = ifelse(imm == 1
+                              & V0301 == 2
+                              & (V3360 >= 1), 1, 0)
+  )
+
+
+df <- df |> rename(wage = V0356) #Rendimento Bruto da Ocupação Principal 
+
+df <- df |> 
+  mutate(
+    annual_wage = wage * 12,
+    log_wage = log(wage),
+    wage_fem = ifelse(imm == 1 & V0301 == 2, wage * 12, 0), # annual salary for women, replace NA with 0
+    log_wage_fem = log(ifelse(is.na(wage_fem), 0, wage_fem)), # replace NA with 0 before taking log
+    wage_men = ifelse(imm == 1 & V0301 == 1, wage * 12, 0), # annual salary for men, replace NA with 0
+    log_wage_men = log(ifelse(is.na(wage_men), 0, wage_men)) # replace NA with 0 before taking log
+  )
+```
+
+
+```{r soma dados}
+# numero de imigrantes na amostra
+imm_base <- df %>% filter(imm == 1)
+sum(imm_base$V7301)
+```
+
+
+```{r soma dados2}
+# numero de imigrantes divorciados
+imm_div_base <- df %>% filter(imm_div == 1)
+sum(imm_div_base$V7301)
+```
+Somente na base de 1991 temos informação de filhos que moram com os pais, que é uma variável de controle importante.
+
+```{r manipula2, comment=FALSE}
+# Juntando as bases
+
+# df com home country divorce rate
+df <- merge(df, home_country_div_rate_1990, by = "pais_nascim", all.x = TRUE)
+#----
+# com gdp_pc: considerar ano 2000
+
+df <- merge(df, gdp_pc_1991, by = "pais_nascim", all.x = TRUE)
+
+# com age_f_first_marriage
+df <- merge(df, mean_age_fmarr_1991, by = "pais_nascim", all.x = TRUE)
+
+# com fertility_rate
+df <- merge(df, fertility_rate_1991, by = "pais_nascim", all.x = TRUE)
+
+# com fem lfp
+# cp1991_nc_4 <- merge(cp1991_nc_3, lfp, by = "pais_nascim", all.x = TRUE)
+
+# com church variables
+## 1995_1998
+df <- merge(df, church_catholic_1995_1998, by = "pais_nascim", all.x = TRUE)
+
+# # com divorce never justifiable
+# ## 1995_1998
+# cp1991_nc_5 <- merge(cp1991_nc_4, church_catholic_1995_1998, by = "pais_nascim", all.x = TRUE)
+# ## 1999_2004
+# cp1991_nc_6 <- merge(cp1991_nc_5, church_catholic_1999_2004, by = "pais_nascim", all.x = TRUE)
+# ## 2005_2009
+# cp1991_nc_7 <- merge(cp1991_nc_6, church_catholic_2005_2009, by = "pais_nascim", all.x = TRUE)
+
+# Tirando outros paises (...-others e paises com NA)----
+df <- df %>% 
+  filter(!`pais_nascim` %in% c("OTH_AFR", "OTH_AM", "OTH_ASIA","OTH_EUR", "OTH_OCE","NO_SPEC"))
+
+df <- df %>% rename(escolaridade = V0328)
+df$fund_completo <- ifelse((df$escolaridade == 3 | df$escolaridade == 4), 1, 0)
+df$med_completo <- ifelse((df$escolaridade == 5 | df$escolaridade == 6), 1, 0)
+df$sup_completo <- ifelse((df$escolaridade == 7 | df$escolaridade == 8), 1, 0)
+
+# transforma escolaridade em continua
+df$escolaridade_cont <- as.numeric(df$escolaridade)
+
+# idade ao quadrado
+df <- df %>%
+  mutate(
+    age_fem = if_else(V0301 == 2, V3072, NA_real_),
+  ) %>%
+  mutate(
+    age_squared = V3072^2
+  )
+# 
+# paises_para_remover <- c("AGO", "ARG", "BEL", "BGR", "BLZ", "BOL",    
+#                          "CHN", "COL", "CRI", "CUB", "CZE", "DOM",    
+#                          "ESP", "FIN", "GTM", "GUF", "GUY", "HND",    
+#                          "HTI", "IND", "IRL", "ISR", "ITA", "JAM",    
+#                          "LBN", "MOZ", "NIC", "NLD", "PAK",    
+#                          "PER", "PRY", "SUR", "SYR", "TWN", "YUG")
+# 
+# # Filtrando o DataFrame para remover os países com NA em hcdr
+# df <- df[!df$pais_nascim %in% paises_para_remover, ]
+# 
+# # Remove na coluna pais_nascim com valores NA
+# df <- df[!is.na(df$pais_nascim), ]
+# 
+base_partial_nc_1991 <- as.data.frame(df)
+# write_xlsx(base_partial_nc_1991, "E:/Thais/Tese_Mestrado/tese_bases/base_gerada/base_nc_1991.xlsx")
+
+```
+
+## Graph: number of immigrants on Census 
+```{r number of immigrants total}
+library(ggplot2)
+country_counts <- df |>
+  group_by(pais_nascim) |>
+  summarize(total_weight = sum(V7301, na.rm = TRUE)) |>
+  arrange(desc(total_weight))
+colnames(country_counts) <- c("Country", "Count")
+
+ggplot(country_counts, aes(x = reorder(Country, Count), y = Count)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  coord_flip() +  
+  labs(title = "Number of Observations by Country", 
+       x = "Country", 
+       y = "Number of Observations") +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 5.5),   
+    axis.text.x = element_text(size = 7),   
+    plot.title = element_text(size = 7, hjust = 0.5), 
+    plot.margin = margin(1, 1, 1, 1, "cm")  
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.03)))
+```
+## Graph: number of immigrants on Census with hcdr !=0
+```{r number of immigrants with hcdr}
+library(ggplot2)
+
+country_counts_hcdr <- df |>
+  filter(hcdr != 0) |>  
+  group_by(pais_nascim) |>
+  summarize(total_weight = sum(V7301, na.rm = TRUE)) |>
+  arrange(desc(total_weight))
+
+colnames(country_counts_hcdr) <- c("Country", "Count")
+
+ggplot(country_counts_hcdr, aes(x = reorder(Country, Count), y = Count)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  coord_flip() +  
+  labs(title = "Number of Observations by Country", 
+       x = "Country", 
+       y = "Number of Observations") +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 5.5),   
+    axis.text.x = element_text(size = 7),   
+    plot.title = element_text(size = 7, hjust = 0.5), 
+    plot.margin = margin(1, 1, 1, 1, "cm")  
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.03)))
+```
+
+## FE Regressions
+```{r reg1}
+## Rodando a regressao (1) - table 2
+# FE: idade e escolaridade
+model1_nc <- feols(imm_div ~ hcdr + imm_homem + imm_fund_completo + imm_em_completo + imm_superior_completo | factor(V3072) + age_squared, data = base_partial_nc_1991, weights = ~V7301, cluster = ~pais_nascim)
+summary(model1_nc)
+```
+
+```{r reg2}
+# FE: idade com escolaridade continua
+model1_1_nc <- feols(imm_div ~ hcdr + imm_homem + escolaridade_cont | factor(V3072) + age_squared, data = base_partial_nc_1991, weights = ~V7301, cluster = ~pais_nascim)
+summary(model1_1_nc)
+```
+
+
+```{r reg3}
+# FE: idade e RM
+model2_nc <- feols(imm_div ~ hcdr + imm_homem + escolaridade_cont | factor(V3072) +age_squared + V7003, data = base_partial_nc_1991, weights = ~V7301, cluster = ~pais_nascim)
+summary(model2_nc)
+```
+
+```{r quantos imigrantes de portugual?}
+base_partial_nc_portugal <- base_partial_nc_1991 %>%
+  filter(pais_nascim == "PRT")
+
+base_partial_nc_portugal <- base_partial_nc_portugal %>% filter(imm == 1)
+sum(base_partial_nc_portugal$V7301)
+```
+
+
+```{r reg4}
+# Drop Portugal (3): maior numero de imigrantes
+base_partial_nc_sem_portugal <- base_partial_nc_1991 %>%
+  filter(pais_nascim != "PRT")
+model2_nc_sem_portugal <- feols(imm_div ~ hcdr + imm_homem + escolaridade_cont | factor(V3072) + age_squared + V7003, data = base_partial_nc_sem_portugal, weights = ~V7301, cluster = ~pais_nascim)
+summary(model2_nc_sem_portugal)
+```
+Resultados se aproximam do paper quando tiramos Portugal, que é um outlier em termos de imigrantes.
+
+```{r quantos imigrantes da russia?}
+base_partial_nc_russia <- base_partial_nc_1991 %>%
+  filter(pais_nascim == "RUS")
+
+base_partial_nc_russia <- base_partial_nc_russia %>% filter(imm == 1)
+sum(base_partial_nc_russia$V7301)
+```
+
+```{r reg5}
+# Drop Russia (and Italy) (4)
+base_partial_nc_sem_russia_italy <- base_partial_nc_1991 %>%
+  filter(pais_nascim != "RUS")
+
+model2_nc_sem_russia_italy <- feols(imm_div ~ hcdr + imm_homem + escolaridade_cont | V3072+age_squared+V7003, data = base_partial_nc_sem_russia_italy, weights = ~V7301, cluster = ~pais_nascim)
+summary(model2_nc_sem_russia_italy)
+
+```
+Resultado não se mantém quando tiramos a Russia.
+
+```{r quantos imigrantes da italia?}
+# ainda nao tenho informacao da italia pros anos 1990
+# base_partial_nc_sem_italia <- base_partial_nc_1991 %>%
+#   filter(pais_nascim != "PRT")
+# 
+# base_partial_nc_sem_italia <- base_partial_nc_sem_italia %>% filter(imm == 1)
+# sum(base_partial_nc_sem_italia$V7301)
+```
+
+# Split sample
+We also separate the analysis by gender to test the hypothesis that women are more sensitive to divorce culture than men p.1016
+
+## Women
+### With hcdr
+
+```{r w1}
+# Split sample: women
+base_partial_nc_women <- df |>
+  filter(V0301 == 2)
+
+model2_nc_women4 <- feols(imm_div ~ hcdr, data = base_partial_nc_women, weights = ~V7301, cluster = ~pais_nascim)
+summary(model2_nc_women4)
+```
+### With age dummy variables and msa fixed effects
+```{r w2}
+model2_nc_women5 <- feols(imm_div ~ hcdr + imm_homem + imm_fund_completo + imm_em_completo + imm_superior_completo | factor(V3072) + age_squared + V7003, data = base_partial_nc_women, weights = ~V7301, cluster = ~pais_nascim)
+summary(model2_nc_women5)
+```
+
+### Plus children that live in the hh
+
+```{r w3}
+model2_nc_women6 <- feols(imm_div ~ hcdr + imm_homem + imm_fund_completo + imm_em_completo + imm_superior_completo + filho_mora_domicilio| factor(V3072) + age_squared + V7003, data = base_partial_nc_women, weights = ~V7301, cluster = ~pais_nascim)
+summary(model2_nc_women6)
+```
+### Plus log(annual wage income) and age_children < 18
+```{r w4}
+model2_nc_women7<- feols(imm_div ~ hcdr + imm_homem + imm_fund_completo + imm_em_completo + imm_superior_completo + filho_mora_domicilio + log_wage_fem| factor(V3072) + age_squared + V7003, data = base_partial_nc_women, weights = ~V7301, cluster = ~pais_nascim)
+summary(model2_nc_women7)
+```
+
+## Men
+### With hcdr
+
+```{r m1}
+# Split sample: men
+base_partial_nc_men <- df |>
+  filter(V0301 == 1)
+
+model2_nc_men1 <- feols(imm_div ~ hcdr, data = base_partial_nc_men, weights = ~V7301, cluster = ~pais_nascim)
+summary(model2_nc_men1)
+
+```
+## Table 3: Home-country differences and the probability of being currently divorced (p.1026)
+### with gdp_pc
+
+```{r 3.1}
+# FE: idade e RM
+model2_nc <- feols(imm_div ~ hcdr + imm_homem + escolaridade_cont + gdp_pc_in_100000| factor(V3072)+age_squared+V7003, data = df, weights = ~V7301, cluster = ~pais_nascim)
+summary(model2_nc)
+
+```
+### with country-of-origin fertility rate
+```{r}
+# FE: idade e RM
+model2_nc <- feols(imm_div ~ hcdr + imm_homem + escolaridade_cont + fertility_rate| factor(V3072)+age_squared+V7003, data = df, weights = ~V7301, cluster = ~pais_nascim)
+summary(model2_nc)
+```
+
+## with Average female age at first marriage
+```{r ffm}
+# FE: idade e RM
+model2_nc <- feols(imm_div ~ hcdr + imm_homem + escolaridade_cont + ffm| factor(V3072)+age_squared+V7003, data = df, weights = ~V7301, cluster = ~pais_nascim)
+summary(model2_nc)
+
+```
+
+### with Everything! (not endogamy rate)
+```{r everything}
+# FE: idade e RM
+model2_nc <- feols(imm_div ~ hcdr +
+                     imm_homem +
+                     escolaridade_cont +
+                     gdp_pc_in_100000 +
+                     fertility_rate +
+                     tx_once_week_church_1995_1998 +
+                     tx_catholic_1995_1998 +
+                     ffm |
+                     factor(V3072)+age_squared+V7003, data = df, weights = ~V7301, cluster = ~pais_nascim)
+summary(model2_nc)
+
+```
+

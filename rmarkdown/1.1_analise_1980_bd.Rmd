@@ -1,0 +1,322 @@
+---
+title: "Análise 1980 bd"
+author: "Thais Takeuchi"
+date: "2024-09-01"
+output: html_document
+---
+
+# Project: Análise 1980
+
+#############################
+# CENSO NAO COMPATIBILIZADO #
+#############################
+
+## Base dos dados
+
+```{r load packages, include=FALSE, message=FALSE, warning=FALSE}
+rm(list = ls())
+
+
+### Load Packages (and install packages if needed)
+load.lib <- c("data.table","foreign","stargazer","devtools","stringi", "srvyr", "survey","tidyverse","gtools", "remote","installr","microdadosBrasil","ggplot2","viridis","hrbrthemes","WDI","dplyr", "arrow", "readxl","rio","writexl","dineq", "basedosdados", "httr", "haven", "openxlsx", "fixest","car","htmltools", "rmarkdown","car")
+
+### Instaling and loading packages
+install.lib <- load.lib[!load.lib %in% installed.packages()]
+for(lib in install.lib) install.packages(lib,dependencies=TRUE)
+sapply(load.lib, require, character=TRUE)
+
+```
+
+## Base dos dados: censo de 1980
+
+```{r censo 1980 basedosdados, message=FALSE, warning=FALSE}
+df <- arrow::read_parquet("E:/Thais/Tese_Mestrado/censo_1980/censo_pessoas_1980_filtrado_bd.parquet")
+
+```
+## Bases auxiliares
+
+### Cultural proxies
+```{r hcdr, include=FALSE, message=FALSE, warning=FALSE}
+## Home country divorce rate
+home_country_div_rate_1980 <- read_xlsx("E:/Thais/Tese_Mestrado/tese_bases/home_country_div_rate/home_country_div_rate_1980.xlsx")
+
+#-------------------------------------------------------------------------------
+## Country of Origin Variables, measured in the year 1980 except where otherwise noted (paper)----
+
+## GDP per capita
+gdp_pc_1980 <- read_xlsx("E:/Thais/Tese_Mestrado/tese_bases/gdp_per_capita/gdp_pc_1980.xlsx")
+
+## Average Female Age at First Marriage
+# age_f_first_marriage <- read_xlsx("E:/Thais/Tese_Mestrado/tese_bases/age_first_marriage/female_age_first_marriage.xlsx")
+mean_age_fmarr_1980 <- read_xlsx("E:/Thais/Tese_Mestrado/tese_bases/age_first_marriage/mean_age_fmarr_1980.xlsx")
+
+## Total fertility rate
+fertility_rate_1980 <- read_xlsx("E:/Thais/Tese_Mestrado/tese_bases/fertility_rate/fertility_rate_1980.xlsx")
+
+```
+
+# Manipulações
+```{r manipula censo 1980}
+# Renomeando países de origem
+library(dplyr)
+df <- df |> rename(pais_nascim = v512)
+
+setDT(df)
+
+df <- df |>
+  mutate(pais_nascim = case_when(
+    pais_nascim == 30 ~ "ARG",
+    pais_nascim == 31 ~ "BOL",
+    pais_nascim == 32 ~ "CAN",
+    pais_nascim == 33 ~ "CHL",
+    pais_nascim == 34 ~ "COL",
+    pais_nascim == 35 ~ "CRI",
+    pais_nascim == 36 ~ "CUB",
+    pais_nascim == 37 ~ "ECU",
+    pais_nascim == 38 ~ "USA",
+    pais_nascim == 39 ~ "GTM",
+    pais_nascim == 40 ~ "GUY",
+    pais_nascim == 41 ~ "GUF",
+    pais_nascim == 42 ~ "HTI",
+    pais_nascim == 43 ~ "HND",
+    pais_nascim == 44 ~ "BLZ",
+    pais_nascim == 45 ~ "JAM",
+    pais_nascim == 46 ~ "MEX",
+    pais_nascim == 47 ~ "NIC",
+    pais_nascim == 48 ~ "PAN",
+    pais_nascim == 49 ~ "PRY",
+    pais_nascim == 50 ~ "PER",
+    pais_nascim == 51 ~ "DOM",
+    pais_nascim == 52 ~ "SLV",
+    pais_nascim == 53 ~ "SUR",
+    pais_nascim == 54 ~ "URY",
+    pais_nascim == 55 ~ "VEN",
+    pais_nascim == 56 ~ "OTH_AM",
+    pais_nascim == 58 | pais_nascim == 57 ~ "DEU",
+    pais_nascim == 59 ~ "AUT",
+    pais_nascim == 60 ~ "BEL",
+    pais_nascim == 61 ~ "BGR",
+    pais_nascim == 62 ~ "DNK",
+    pais_nascim == 63 ~ "ESP",
+    pais_nascim == 64 ~ "FIN",
+    pais_nascim == 65 ~ "FRA",
+    pais_nascim == 66 ~ "GBR",
+    pais_nascim == 67 ~ "GRC",
+    pais_nascim == 68 ~ "NLD",
+    pais_nascim == 69 ~ "HUN",
+    pais_nascim == 70 ~ "IRL",
+    pais_nascim == 71 ~ "ITA",
+    pais_nascim == 72 ~ "YUG",
+    pais_nascim == 73 ~ "NOR",
+    pais_nascim == 74 ~ "POL",
+    pais_nascim == 75 ~ "PRT",
+    pais_nascim == 76 ~ "ROU",
+    pais_nascim == 77 ~ "SWE",
+    pais_nascim == 78 ~ "CHE",
+    pais_nascim == 79 ~ "CZE",
+    pais_nascim == 80 ~ "RUS",
+    pais_nascim == 81 ~ "OTH_EUR",
+    pais_nascim == 82 ~ "AGO",
+    pais_nascim == 83 ~ "EGY",
+    pais_nascim == 84 ~ "MOZ",
+    pais_nascim == 85 ~ "OTH_AFR",
+    pais_nascim == 86 ~ "CHN",
+    pais_nascim == 87 ~ "TWN",
+    pais_nascim == 88 ~ "KOR",
+    pais_nascim == 89 ~ "IND",
+    pais_nascim == 90 ~ "ISR",
+    pais_nascim == 91 ~ "JPN",
+    pais_nascim == 92 ~ "LBN",
+    pais_nascim == 93 ~ "PAK",
+    pais_nascim == 94 ~ "SYR",
+    pais_nascim == 95 ~ "TUR",
+    pais_nascim == 96 ~ "OTH_ASIA",
+    pais_nascim == 97 ~ "AUS",
+    pais_nascim == 98 ~ "OTH_OCE",
+    pais_nascim == 99 ~ "NO_SPEC",
+    TRUE ~ as.character(pais_nascim)
+  ))
+```
+
+```{r manipula 2}
+df$ano <- 1980
+
+# converte variaveis em numerico
+
+# separados, divorciados e desquitados
+df <- df |>
+  mutate(
+    ano_nasc = ano - v606,
+    imm = ifelse(v516 == "7 a 10 anos", 1, 0),
+    imm_div = ifelse(imm == 1
+                     & v526 %in% c("Divorciado"), 1, 0),
+  )
+
+df <- df |> filter(imm == 1)
+
+# so divorciados
+# df <- df |>
+#   mutate(
+#     ano_nasc = ano - v606,
+#     imm = ifelse(v516 == 7, 1, 0),
+#     imm_div = ifelse(imm == 1
+#                      & v526 %in% c(8), 1, 0),
+#   )
+
+# # se imm_div e NA entao coloca zero
+# df$imm_div[is.na(df$imm_div)] <- 0
+
+```
+
+### sum immigrants
+```{r quantos imigrantes?}
+# numero de imigrantes na amostra
+imm_base <- df |> filter(imm == 1)
+sum(imm_base$v604)
+```
+ 
+### sum divorced immigrants
+```{r quantos imm_div}
+# numero de imigrantes divorciados
+imm_div_base <- df |> filter(imm_div == 1)
+sum(imm_div_base$v604)
+```
+
+```{r manipula 3}
+# transforma em numerico
+df$v554 <- as.numeric(df$v554)
+
+df <- df |>
+  mutate(
+    escolaridade_cont = case_when(
+      v524 == "Nenhuma" ~ 0,
+      v524 == "Primário" ~ 1,
+      v524 == "Ginasial médio" ~ 2,
+      v524 == "1º grau" ~ 3,
+      v524 == "2º grau" ~ 4,
+      v524 == "Colegial médio" ~ 5,
+      v524 == "Supletivo 1º grau" ~ 6,
+      v524 == "Supletivo 2º grau" ~ 7,
+      v524 == "Superior" ~ 8,
+      TRUE ~ NA_real_
+    )
+  )
+
+
+df <- df |>
+  mutate(
+    imm_homem = ifelse(v501 == "1"
+                       & imm == 1, 1, 0),
+    imm_alf = ifelse(imm == 1 & (v519 == "Sim"), 1, 0), 
+    imm_fund_completo = ifelse(imm == 1
+                               & (v524 == "1º grau" | v524 == "Supletivo 1º grau" | v524 == "Ginasial médio"), 1, 0), 
+    imm_em_completo = ifelse(imm == 1
+                             & (v524 == "2º grau" | v524 == "Supletivo 2º grau" | v524 == "Colegial médio"), 1, 0), 
+    imm_superior_completo = ifelse(imm == 1
+                                   & (v524 == "Superior"), 1, 0), 
+    filho_menor = ifelse(imm == 1 & v570 <= 18, 1, 0),
+    imm_mulher1filho = ifelse(imm == 1
+                              & v501 == "3"
+                              & (v554 >= 1), 1, 0)
+  )
+
+# Tirando outros paises (...-others e paises com NA)----
+df <- df |> 
+  filter(!`pais_nascim` %in% c("OTH_AFR", "OTH_AM", "OTH_ASIA","OTH_EUR", "OTH_OCE","NO_SPEC"))
+
+# escolaridade como variavel continua
+df <- df %>% rename(escolaridade = v524)
+
+df$escolaridade_cont <- as.numeric(df$escolaridade)
+
+# df$fund_completo <- ifelse(df$escolaridade_cont == 2 | df$escolaridade_cont == 3 |df$escolaridade_cont == 6 , 1, 0)
+# df$med_completo <- ifelse(df$escolaridade_cont == 4 | df$escolaridade_cont == 7 | df$escolaridade_cont == 5, 1, 0)
+# df$sup_completo <- ifelse(df$escolaridade_cont == 8, 1, 0)
+
+# idade ao quadrado
+df <- df |>
+  mutate(
+    age_squared = v606^2
+  )
+
+df <- df |> rename(wage = v607)
+
+df <- df |> 
+  mutate(
+    annual_wage = wage * 12,
+    log_wage = log(wage),
+    wage_fem = ifelse(imm == 1 & v501 == "3", wage * 12, 0), # annual salary for women, replace NA with 0
+    log_wage_fem = log(ifelse(is.na(wage_fem), 0, wage_fem)), # replace NA with 0 before taking log
+    wage_men = ifelse(imm == 1 & v501 == "3", wage * 12, 0), # annual salary for men, replace NA with 0
+    log_wage_men = log(ifelse(is.na(wage_men), 0, wage_men)) # replace NA with 0 before taking log
+  )
+```
+
+### Merge census to cultural proxies
+
+```{r merge}
+# Juntando as bases
+
+# df com home country divorce rate
+df <- merge(df, home_country_div_rate_1980, by = "pais_nascim", all.x = TRUE)
+
+df <- df[!is.na(df$hcdr), ]
+
+df$v606_factor <- as.factor(df$v606)
+
+# com gdp_pc
+df <- merge(df, gdp_pc_1980, by = "pais_nascim", all.x = TRUE)
+
+# com age_f_first_marriage
+df <- merge(df, mean_age_fmarr_1980, by = "pais_nascim", all.x = TRUE)
+
+# com fertility_rate
+df <- merge(df, fertility_rate_1980, by = "pais_nascim", all.x = TRUE)
+
+#write_xlsx(df, "E:/Thais/Tese_Mestrado/tese_bases/base_gerada/base_bd_1980.xlsx")
+```
+
+```{r ols censo 1980}
+## Rodando a regressao (1) - table 2
+# FE: idade
+model1_nc <- feols(imm_div ~ hcdr + imm_homem + imm_fund_completo + imm_em_completo + imm_superior_completo| factor(v606)+age_squared, data = df, weights = ~v604, cluster = ~pais_nascim)
+summary(model1_nc)
+
+```
+
+```{r com esc continua}
+# # FE: idade com escolaridade continua
+# model1_1_nc <- feols(imm_div ~ hcdr + imm_homem + escolaridade_cont | factor(v606) + age_squared, data = df, weights = ~v604, cluster = ~pais_nascim)
+# summary(model1_1_nc)
+
+```
+
+```{r sem rm}
+# # FE: idade e RM (sem rm - gerar)
+# model2_nc <- feols(imm_div ~ hcdr + imm_homem + escolaridade_cont | v606+age_squared+v7003, data = base_partial_bd_1980, weights = ~v604)
+# summary(model2_nc)
+```
+
+```{r drop portugal}
+# Drop Portugal (3)
+base_partial_bd_sem_portugal <- df |>
+  filter(pais_nascim != "PRT")
+
+model2_bd_sem_portugal <- feols(imm_div ~ hcdr + imm_homem + imm_fund_completo + imm_em_completo + imm_superior_completo | v606+age_squared, data = base_partial_bd_sem_portugal, weights = ~v604, cluster = ~pais_nascim)
+summary(model2_bd_sem_portugal)
+
+```
+
+```{r drop russia and italy}
+# Drop Russia and Italy (4)
+base_partial_bd_sem_russia_italy <- df |>
+  filter(pais_nascim != "ITA")
+
+model2_bd_sem_russia_italy <- feols(imm_div ~ hcdr + imm_homem + imm_fund_completo + imm_em_completo + imm_superior_completo | v606+age_squared, data = base_partial_bd_sem_russia_italy, weights = ~v604, cluster = ~pais_nascim)
+summary(model2_bd_sem_russia_italy)
+```
+Por que temos tantas observações na base de 1980 quando comparamos com 2000 e 1991?
+```{r}
+
+```
+
