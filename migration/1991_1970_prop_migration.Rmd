@@ -1,0 +1,316 @@
+---
+title: "Análise 1991: usando dados de lfp + tfr de 1970"
+author: "Thais Takeuchi"
+date: "2024-10-19"
+output: html_document
+---
+
+## Load packages
+
+```{r load, message=FALSE, warning=FALSE, include=FALSE}
+#######################
+# PREPARE ENVIRONMENT
+#######################
+
+rm(list = ls())
+
+load.lib <- c("data.table","foreign","stargazer","devtools","stringi", "srvyr", "survey","tidyverse","gtools", "remote","installr","microdadosBrasil","ggplot2","viridis","hrbrthemes","WDI","dplyr", "arrow", "readxl","rio","writexl","dineq", "basedosdados", "httr", "haven", "openxlsx", "fixest", "readxl", "xtable")
+
+install.lib <- load.lib[!load.lib %in% installed.packages()]
+for(lib in install.lib) install.packages(lib,dependencies=TRUE)
+sapply(load.lib, require, character=TRUE)
+```
+
+## CENSO - proportion migration
+
+```{r census}
+dados_1991 <- read_dta("D:/censo_1991/tratada/censo_1991_migracao_tratada.dta")
+setDT(dados_1991)
+# choose variables
+columns <- c(
+    "uf_nascim", "uf", "migrante", "sexo", "n_domicilio", "responsavel",
+    "conjuge", "casal", "casado", "migrante_casada", "moradia_uf", "migrante_casada_15",
+    "responsavel_conjuge", "count_responsavel", "count_conjuge", "age_fem", "age_squared_fem",
+    "age_sp", "age_sp_range", "main_sample", "fund_mulher", "fund_homem", "em_mulher",
+    "em_homem", "superior_mulher", "superior_homem", "educ_mulher", "educ_homem", "children",
+    "children_under_5", "horas_trabalho_principal", "horas_trabalho_outros", "horas_total",
+    "hworked_fem", "ocup_migrante", "horas_migrante_15", "income_sp", "income_sp_raw", "IDQues",
+    "TipoReg", "UF", "V1102", "V7301"
+)
+
+dt_1991 <- dados_1991 %>%
+    dplyr::select(all_of(columns))
+
+# each municipality
+dados_agg <- dt_1991 %>%
+  filter(migrante == 1) %>%
+  group_by(V1102, uf_nascim) %>%
+  summarise(peso_uf = sum(V7301), .groups = "drop")
+
+# total migration per municipality
+total_municipio <- dt_1991 %>%
+  filter(migrante == 1) %>%
+  group_by(V1102) %>%
+  summarise(total_migrantes = sum(V7301), .groups = "drop")
+
+resultados <- dados_agg %>%
+  left_join(total_municipio, by = "V1102") %>%
+  mutate(proporcao = peso_uf / total_migrantes)
+
+#dt_1991_v2<- dt_1991 %>%
+#  left_join(resultados, by = "V1102")
+
+resultados_wide <- resultados %>%
+  pivot_wider(
+    names_from = uf_nascim, 
+    values_from = proporcao, 
+    names_prefix = "prop_uf_"
+  )
+
+# save xlsx
+write.xlsx(resultados_wide, file = "prop_migracao_municipio_1991.xlsx")
+
+# each state
+dados_agg <- dt_1991 %>%
+  filter(migrante == 1) %>%
+  group_by(uf_nascim) %>%
+  summarise(peso_uf = sum(V7301), .groups = "drop")
+
+total_nacional <- dt_1991 %>%
+  filter(migrante == 1) %>%
+  summarise(total_migrantes = sum(V7301)) %>%
+  pull(total_migrantes)
+
+resultados <- dados_agg %>%
+  mutate(proporcao = peso_uf / total_nacional)
+
+# save xlsx
+write.xlsx(resultados, file = "prop_migracao_uf_1991.xlsx")
+
+
+
+
+
+
+
+
+
+# 2000
+dados_2000 <- read_dta("D:/1_migration/1_datasets_migrants/censo/2000/censo_2000_migracao_tratada.dta")
+
+
+
+
+
+
+
+
+
+dt_1991_v2 <- dt_1991 %>%
+  left_join(resultados_wide, by = "V1102")
+
+```
+
+
+
+
+
+
+
+
+## LFP
+
+```{r pnad}
+lfp_1970_30_49_uf <- read_xlsx("D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_30-49_1970.xlsx")
+lfp_1970_30_49_uf <- lfp_1970_30_49_uf |> 
+  rename(lfp_uf_30_49_1970 = lfp_uf_1970)
+
+lfp_1970_30_39_uf <- read_xlsx("D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_30-39_1970.xlsx")
+lfp_1970_30_39_uf <- lfp_1970_30_39_uf |> 
+  rename(lfp_uf_30_39_1970 = lfp_uf_1970)
+
+lfp_1970_40_49_uf <- read_xlsx("D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_40-49_1970.xlsx")
+lfp_1970_40_49_uf <- lfp_1970_40_49_uf |> 
+  rename(lfp_uf_40_49_1970 = lfp_uf_1970)
+
+lfp_1970_mais_10_uf <- read_xlsx("D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_10-mais_1970.xlsx")
+lfp_1970_mais_10_uf <- lfp_1970_mais_10_uf |> 
+  rename(lfp_uf_mais_10_1970 = lfp_uf_1970)
+```
+
+## TFR
+
+```{r tfr}
+tfr_1940_1980_uf <- read_xlsx("D:/1_migration/1_datasets_migrants/fecundidade_brasil/tfr_1940_1980.xlsx")
+tfr_1970_uf <- tfr_1940_1980_uf |>
+  dplyr::select(uf_nascim, tfr_1970)
+```
+
+## Urbanization rate
+
+```{r urban rate}
+urban_1970 <- read_xlsx("D:/1_migration/1_datasets_migrants/infra/urban_1970.xlsx")
+
+```
+
+### junta bases
+
+```{r junta bases}
+data_1991 <- merge(data_1991, lfp_1970_30_49_uf, by = "uf_nascim")
+data_1991 <- merge(data_1991, lfp_1970_30_39_uf, by = "uf_nascim")
+data_1991 <- merge(data_1991, lfp_1970_mais_10_uf, by = "uf_nascim")
+data_1991 <- merge(data_1991, lfp_1970_40_49_uf, by = "uf_nascim")
+
+data_1991 <- merge(data_1991, tfr_1970_uf, by = "uf_nascim")
+
+data_1991 <- merge(data_1991, urban_1970, by = "uf_nascim")
+
+```
+
+### desagrega
+
+```{r desagrega}
+data_30_49_1991 <- data_1991 |> 
+  filter(age_fem %in% c(30:49))
+write_xlsx(data_30_49_1991, "D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_30_49.xlsx")
+
+data_30_39_1991 <- data_1991 |> 
+  filter(age_fem %in% c(30:39))
+write_xlsx(data_30_39_1991, "D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_30_39.xlsx")
+
+data_40_49_1991 <- data_1991 |> 
+  filter(age_fem %in% c(30:39))
+write_xlsx(data_40_49_1991, "D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_40_49.xlsx")
+
+rural_40_49 <- data_40_49_1991 |>
+  filter(V1061 %in% c(4,5,6,8))
+write_xlsx(rural_40_49, "D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_40_49_rural.xlsx")
+
+urbana_40_49 <- data_40_49_1991 |> 
+  filter(V1061 %in% c(1,2,3))
+write_xlsx(urbana_40_49, "D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_40_49_urbana.xlsx")
+
+rural_30_39 <- data_30_39_1991 |>
+  filter(V1061 %in% c(4,5,6,8))
+write_xlsx(rural_30_39, "D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_30_39_rural.xlsx")
+
+urbana_30_39 <- data_30_39_1991 |> 
+  filter(V1061 %in% c(1,2,3))
+write_xlsx(urbana_30_39, "D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_30_39_urbana.xlsx")
+
+rural_30_49 <- data_30_49_1991 |> 
+  filter(V1061 %in% c(4,5,6,8))
+write_xlsx(rural_30_49, "D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_30_49_rural.xlsx")
+
+urbana_30_49 <- data_30_49_1991 |> 
+  filter(V1061 %in% c(1,2,3))
+write_xlsx(urbana_30_49, "D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_30_49_urbana.xlsx")
+```
+
+### separa por estados
+
+```{r separa por estados}
+ufs <- c(51, 12, 35, 50, 42, 14, 13, 41, 28, 33, 43, 15, 17, 53, 52, 22, 31, 26, 24, 32, 21, 11, 29, 23, 25, 16, 27)
+
+# Loop para criar um dataframe para cada UF na lista especificada
+for (estado in ufs) {
+  assign(paste0("data_", estado), data %>% filter(uf == estado))
+}
+```
+
+### sample characteristics
+
+```{r sample charact}
+# main sample 
+base <- data_30_49_1991|> filter(migrante_casada_15 == 1)
+sum(base$V7301)
+```
+
+# Distribuição de escolaridade
+
+### Homens
+
+```{r dist escolaridade homem}
+
+data_esc <- read_parquet("D:/1_migration/1_datasets_migrants/censo/1991/censo_1991_migracao_tratada_migrante_15.parquet")
+
+table(data_esc$educ_homem)
+
+educ_homem <- data.frame(
+  escolaridade = c(
+    "Creche, pré-escolar", 
+    "Alfabetização de jovens e adultos", 
+    "Antigo primário (elementar)", 
+    "Antigo ginásio (médio 1º ciclo)", 
+    "Ensino fundamental (1º ao 4º ano)", 
+    "Ensino fundamental (5º ano)", 
+    "Ensino fundamental (6º ao 9º ano)", 
+    "Supletivo do fundamental", 
+    "Antigo científico (médio 2º ciclo)", 
+    "Regular ou supletivo do ensino médio ou do 2º grau", 
+    "Superior de graduação", 
+    "Especialização de nível superior", 
+    "Mestrado", 
+    "Doutorado"
+  ),
+  frequencia = c(
+    7878, 10817, 76247, 12083, 108665, 63681, 122056, 14987, 
+    7020, 145575, 50228, 9409, 2803, 1581
+  )
+)
+
+esc_man <- ggplot(educ_homem, aes(x = reorder(escolaridade, frequencia), y = frequencia)) +
+  geom_bar(stat = "identity", fill = "blue", alpha = 0.7) +
+  coord_flip() + 
+  labs(title = "Distribuição de Escolaridade para Homens",
+       x = "Nível de Escolaridade",
+       y = "Frequência") +
+  theme_classic() +  
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggsave("D:/1_migration/4_results_migrants/1991_1970/esc_man_1991.png", plot = esc_man, width = 10, height = 6)
+
+# Mulher
+table(data_esc$educ_mulher)
+
+educ_mulher <- data.frame(
+  escolaridade = c(
+    "Creche, pré-escolar", 
+    "Alfabetização de jovens e adultos", 
+    "Antigo primário (elementar)", 
+    "Antigo ginásio (médio 1º ciclo)", 
+    "Ensino fundamental (1º ao 4º ano)", 
+    "Ensino fundamental (5º ano)", 
+    "Ensino fundamental (6º ao 9º ano)", 
+    "Supletivo do fundamental", 
+    "Antigo científico (médio 2º ciclo)", 
+    "Regular ou supletivo do ensino médio ou do 2º grau", 
+    "Superior de graduação", 
+    "Especialização de nível superior", 
+    "Mestrado", 
+    "Doutorado"
+  ),
+  frequencia = c(
+    1754,  3003, 19554,  2882, 32406, 19708, 44804,  5534,  1449, 63343, 16956,  3962,   467,   122 
+  )
+)
+
+esc_woman <- ggplot(educ_mulher, aes(x = reorder(escolaridade, frequencia), y = frequencia)) +
+  geom_bar(stat = "identity", fill = "blue", alpha = 0.7) +
+  coord_flip() + 
+  labs(title = "Distribuição de Escolaridade para Mulheres",
+       x = "Nível de Escolaridade",
+       y = "Frequência") +
+  theme_classic() +  # Aplicar o tema clássico com fundo claro
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggsave("D:/1_migration/4_results_migrants/1991_1970/esc_woman_1991.png", plot = esc_woman, width = 10, height = 6)
+
+```
+
+```{r horas trabalhadas}
+table(data$v0653)
+```
+
+```{r image}
+setwd("D:/2_scripts_migration")
+save.image("1991_1970_new.RData")
+```

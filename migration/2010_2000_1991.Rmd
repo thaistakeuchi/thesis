@@ -1,0 +1,3680 @@
+---
+title: "Results for 2010, 2000 and 1991"
+author: "Thais Takeuchi"
+date: "2024-10-24"
+output: html_document
+---
+
+## Load packages
+```{r load, message=FALSE, warning=FALSE, include=FALSE}
+#######################
+# PREPARE ENVIRONMENT
+#######################
+
+rm(list = ls())
+
+load.lib <- c("data.table","foreign","stargazer","devtools","stringi", "srvyr", "survey","tidyverse","gtools", "remote","installr","microdadosBrasil","ggplot2","viridis","hrbrthemes","WDI","dplyr", "arrow", "readxl","rio","writexl","dineq", "basedosdados", "httr", "haven", "openxlsx", "fixest", "readxl", "xtable", "kableExtra", "margins","marginaleffects")
+
+install.lib <- load.lib[!load.lib %in% installed.packages()]
+for(lib in install.lib) install.packages(lib,dependencies=TRUE)
+sapply(load.lib, require, character=TRUE)
+```
+
+## CENSOS
+```{r census}
+
+#########
+# CENSUS
+#########
+
+# 1991 #
+data_1991 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_30_49.xlsx")
+data_1991$children[data_1991$children == 99] <- NA
+
+# work
+data_1991$salary <- ifelse(
+  data_1991$V0356 != 9999999,
+  data_1991$V3561,
+  NA
+)
+
+semanas_por_mes <- 4.33
+data_1991$horas_trabalhadas <- data_1991$V0354
+data_1991$horas_trabalhadas_mes <- data_1991$V0354 * semanas_por_mes
+data_1991$ganhos_horarios <- data_1991$salary / data_1991$horas_trabalhadas_mes
+data_1991$ganhos_horarios[data_1991$ganhos_horarios <= 0] <- NA
+data_1991$log_ganhos_horarios <- log(data_1991$ganhos_horarios)
+
+# cria variavel de idade do esposo ao quadrado
+data_1991$age_squared_sp <- data_1991$age_sp^2
+
+## urbana
+data_urbana_1991 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_30_49_urbana.xlsx")
+data_urbana_1991$age_squared_sp <- data_urbana_1991$age_sp^2
+
+## rural
+data_rural_1991 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_30_49_rural.xlsx")
+data_rural_1991$age_squared_sp <- data_rural_1991$age_sp^2
+
+# 2000 #
+## total
+data_2000 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_2000_proxies_1980_30_49.xlsx")
+data_2000$age_squared_sp <- data_2000$age_sp^2
+
+## urbana
+data_urbana_2000 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_2000_proxies_1980_30_49_urbana.xlsx")
+data_urbana_2000$age_squared_sp <- data_urbana_2000$age_sp^2
+
+## rural
+data_rural_2000 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_2000_proxies_1980_30_49_rural.xlsx")
+data_rural_2000$age_squared_sp <- data_rural_2000$age_sp^2
+
+# 2010 #
+data_2010 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_2010_proxies_1991_30_49.xlsx")
+data_2010$age_squared_sp <- data_2010$age_sp^2
+
+
+
+
+
+
+
+
+#######
+# RACE
+#######
+
+## White
+## 1991
+data_white_1991 <- data_1991 |> 
+  filter(V0309 == 1)
+
+## 2000
+data_white_2000 <- data_2000 |> 
+  filter(v0408 == 1)
+
+## 2010
+data_white_2010 <- data_2010 |> 
+  filter(raca == 1)
+
+## Black/Brown
+## 1991
+data_black_1991 <- data_1991 |> 
+  filter(V0309 %in% c(2,4))
+
+## 2000
+data_black_2000 <- data_2000 |> 
+  filter(v0408 %in% c(2,4))
+
+## 2010
+data_black_2010 <- data_2010 |> 
+  filter(raca %in% c(2,4))
+
+######################
+# ROBUSTEZ - work
+######################
+
+## white
+## 1991
+data_white_without_53_1991 <- data_white_1991 |> # Brasilia
+  filter(uf_nascim != 53)
+data_white_without_51_1991 <- data_white_1991 |> # Mato Grosso
+  filter(uf_nascim != 51)
+
+## 2000
+data_white_without_53_2000 <- data_white_2000 |>  # Brasilia
+  filter(uf_nascim != 53)
+data_white_without_51_2000 <- data_white_2000 |>  # Mato Grosso
+  filter(uf_nascim != 51)
+
+## 2010
+data_white_without_53_2010 <- data_white_2010 |>  # Brasilia
+  filter(uf_nascim != 53)
+data_white_without_17_2010 <- data_white_2010 |>  # Tocantins
+  filter(uf_nascim != 17)
+
+## black/brown
+## 1991
+data_black_without_53_1991 <- data_black_1991 |> # Brasilia
+  filter(uf_nascim != 53)
+data_black_without_51_1991 <- data_black_1991 |> # Mato Grosso
+  filter(uf_nascim != 51)
+
+## 2000
+data_black_without_53_2000 <- data_black_2000 |>  # Brasilia
+  filter(uf_nascim != 53)
+data_black_without_51_2000 <- data_black_2000 |>  # Mato Grosso
+  filter(uf_nascim != 51)
+
+## 2010
+data_black_without_53_2010 <- data_black_2010 |>  # Brasilia
+  filter(uf_nascim != 53)
+data_black_without_17_2010 <- data_black_2010 |>  # Tocantins
+  filter(uf_nascim != 17)
+
+#####################
+# ROBUSTEZ - fertility
+#####################
+
+## highest LFP
+## 1991
+data_without_13_1991 <- data_1991 |> # Amazonas
+  filter(uf_nascim != 13)
+
+## 2000
+data_without_21_2000 <- data_2000 |>  # Maranhão
+  filter(uf_nascim != 21)
+
+## 2010
+data_without_16_2010 <- data_2010 |>  # Amapá
+  filter(uf_nascim != 16)
+
+## smallest LFP
+## 1991
+data_without_33_1991 <- data_1991 |> # rj
+  filter(uf_nascim != 33)
+
+## 2000
+  data_without_33_2000 <- data_2000 |>  # rj
+  filter(uf_nascim != 33)
+
+## 2010
+data_without_33_2010 <- data_2010 |>  # rj
+  filter(uf_nascim != 33)
+
+########################
+# ROBUSTEZ - age (40-49)
+########################
+
+## 1991
+data_40_49_1991 <- data_1991 |> 
+  filter(age_fem %in% c(40:49))
+
+## 2000
+data_40_49_2000 <- data_2000 |>  
+  filter(age_fem %in% c(40:49))
+
+## 2010
+data_40_49_2010 <- data_2010 |>  
+  filter(age_fem %in% c(40:49))
+```
+
+
+Education variables.
+```{r education variables}
+#data_1991 <- data_1991 |> 
+  #mutate(
+    #menos_fund_mulher = ifelse(V0328 %in% c(0,1,2) & migrante_casada == 1, 1, 0),
+    #menos_fund_homem  = ifelse(V0328 %in% c(0,1,2) & sexo == 1, 1, 0))
+```
+
+> # FE Regressions
+
+## Avaliando o impacto da lfp da UF de origem sobre a probabilidade de ocupação da mulher migrante
+
+```{r variables in latex work}
+var_labels <- c(
+  "ocupada_migrante_15" = "Employed Migrant",
+  "lfp_uf_30_49_1970" = "Labor Force Participation (1970)",
+  "lfp_uf_30_49_1980" = "Labor Force Participation (1980)",
+  "lfp_uf_30_49_1991" = "Labor Force Participation (1991)",
+  "fund_mulher" = "Basic Education (Female)",
+  "em_mulher" = "High School (Female)",
+  "superior_mulher" = "Higher Education (Female)",
+  "fund_homem" = "Basic Education (Male)",
+  "em_homem" = "High School (Male)",
+  "superior_homem" = "Higher Education (Male)",
+  "income_sp_raw" = "Income (Spouse)",
+  "age_fem" = "Age (Female)",
+  "age_squared_fem" = "Age Squared (Female)",
+  "age_sp" = "Age (Spouse)",
+  "children_under_5" = "Number of Children Under 5",
+  "V1102" = "Munic 1991",
+  "v0103" = "Munic 2000",
+  "munic" = "Munic 2010",
+  "uf_nascim" = "State of Birth"
+)
+```
+
+```{r save results}
+setwd("D:/1_migration/4_results_migrants/graphs")
+```
+
+### 1991
+
+#### only lfp 1991
+```{r work 1991 1}
+work_1991_1 <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970+ age_fem + age_squared_fem + age_sp|V1102, data = data_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_1)
+etable(work_1991_1, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### lfp 1991 + woman's schooling
+```{r work 1991 2}
+work_1991_2 <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher+ age_fem + age_squared_fem + age_sp|V1102, data = data_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_2)
+etable(work_1991_2, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### lfp 1991 + woman's schooling + spouse's schooling
+```{r work 1991 3}
+work_1991_3 <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + age_fem + age_squared_fem + age_sp+ income_sp_raw|V1102, data = data_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_3)
+etable(work_1991_3, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### lfp 1991 + spouse's schooling
+```{r work 1991 5}
+work_1991_5 <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_5)
+etable(work_1991_5, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### lfp 1991 + spouse's schooling: probit
+
+```{r work 1991 5 probit}
+work_1991_5_probit <- feglm(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 | V1102, 
+                            data = data_1991, 
+                            weights = ~V7301, 
+                            cluster = ~uf_nascim, 
+                            family = binomial(link = "probit"))
+summary(work_1991_5_probit)
+```
+
+```{r work 1991 5 probit table }
+# Dicionário para renomear as variáveis
+var_names <- c(
+  "age_fem" = "Age (Woman)",
+  "age_sp" = "Age (Spouse)",
+  "age_squared_fem" = "Age Squared (Woman)",
+  "children_under_5" = "Children Under 5",
+  "em_homem" = "Primary Education (Spouse)",
+  "fund_homem" = "Secondary Education (Spouse)",
+  "income_sp_raw" = "Spouse's Income",
+  "lfp_uf_30_49_1970" = "LFP Rate 1970",
+  "superior_homem" = "Higher Education (Spouse)"
+)
+
+# Criar um data frame para armazenar os efeitos marginais ajustados por desvio padrão
+resultados <- avg_marginal_effects %>%
+  mutate(
+    # Calcular o desvio padrão para cada variável (somente para variáveis contínuas)
+    std_dev = sapply(term, function(var) {
+      if (is.numeric(data_1991[[var]])) {
+        return(sd(data_1991[[var]], na.rm = TRUE))
+      } else {
+        return(NA)
+      }
+    }),
+    # Calcular o efeito marginal ajustado para variáveis contínuas
+    marginal_effect_sd = ifelse(!is.na(std_dev), estimate * std_dev, estimate),
+    # Definir níveis de significância
+    sig = case_when(
+      p.value < 0.01 ~ "***",
+      p.value < 0.05 ~ "**",
+      p.value < 0.1 ~ "*",
+      TRUE ~ ""
+    ),
+    # Renomear variáveis de acordo com o dicionário
+    term = ifelse(term %in% names(var_names), var_names[term], term)
+  )
+
+# Filtrar apenas colunas relevantes para a tabela
+resultados <- resultados %>%
+  dplyr::select(term, marginal_effect_sd, std.error, sig)
+
+# Gerar código LaTeX no formato especificado
+cat("\\begin{table}[!h]\n\\centering\n\\begin{tabular}{lc}\n\\toprule\n")
+cat("\\multicolumn{1}{c}{Dependent Variable: } & \\multicolumn{1}{c}{Employed Woman} \\\\\n")
+cat("\\cmidrule(l{3pt}r{3pt}){1-1} \\cmidrule(l{3pt}r{3pt}){2-2}\n & (1991)\\\\\n\\midrule\n")
+
+# Iterar sobre as linhas para formatar cada variável
+for (i in 1:nrow(resultados)) {
+  # Imprimir o nome da variável, efeito marginal ajustado e nível de significância
+  cat(resultados$term[i], "&", round(resultados$marginal_effect_sd[i], 4), resultados$sig[i], "\\\\\n")
+  # Imprimir o erro-padrão entre parênteses na linha abaixo
+  cat("& (", round(resultados$std.error[i], 4), ")\\\\\n")
+}
+
+# Adicionar informações sobre efeitos fixos e estatísticas de ajuste
+cat("\\midrule & \\\\\n\\emph{Fixed-effects} & \\\\\nMunic & Yes\\\\\n")
+cat("\\midrule & \\\\\n\\emph{Fit statistics} & \\\\\n")
+
+cat("Observations &", nobs(work_1991_5_probit), "\\\\\n")
+
+# Calcular e imprimir o Pseudo R²
+cat("Adj. Pseudo R$^2$ &", round(summary(work_1991_5_probit)$pseudo_r2, 4), "\\\\\n")
+cat("\\bottomrule\n")
+cat("\\multicolumn{2}{l}{\\rule{0pt}{1em}Clustered (State of Origin) sd in parentheses. Significance levels: *** $p<0.01$, ** $p<0.05$, * $p<0.1$}\\\\\n")
+cat("\\end{tabular}\n\\end{table}")
+
+```
+#-------------------------------------------------------------------------------
+#### everything
+```{r work 1991 4}
+work_1991_4 <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4)
+etable(work_1991_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### everything: probit
+
+```{r work 1991 4 probit}
+work_1991_4_probit <- feglm(ocupada_migrante_15 ~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 | V1102, 
+                            data = data_1991, 
+                            weights = ~V7301, 
+                            cluster = ~uf_nascim, 
+                            family = binomial(link = "probit"))
+summary(work_1991_4_probit)
+```
+```{r work 1991 4 probit table}
+
+
+
+
+
+
+
+
+
+avg_marginal_effects <- slopes(work_1991_4_probit)
+
+# Convert to a data frame if not already
+avg_marginal_effects <- as.data.frame(avg_marginal_effects)
+
+var_names <- c(
+  "age_fem" = "Age (Woman)",
+  "age_sp" = "Age (Spouse)",
+  "age_squared_fem" = "Age Squared (Woman)",
+  "children_under_5" = "Children Under 5",
+  "em_mulher" = "Primary Education (Woman)",
+  "fund_mulher" = "Secondary Education (Woman)",
+  "superior_mulher" = "Higher Education (Woman)",
+  "em_homem" = "Primary Education (Spouse)",
+  "fund_homem" = "Secondary Education (Spouse)",
+  "income_sp_raw" = "Spouse's Income",
+  "lfp_uf_30_49_1970" = "LFP Rate 1970",
+  "superior_homem" = "Higher Education (Spouse)"
+)
+
+# Criar um data frame para armazenar os efeitos marginais ajustados por desvio padrão
+resultados <- avg_marginal_effects %>%
+  mutate(
+    # Calcular o desvio padrão para cada variável (somente para variáveis contínuas)
+    std_dev = sapply(term, function(var) {
+      if (is.numeric(data_1991[[var]])) {
+        return(sd(data_1991[[var]], na.rm = TRUE))
+      } else {
+        return(NA)
+      }
+    }),
+    # Calcular o efeito marginal ajustado para variáveis contínuas
+    marginal_effect_sd = ifelse(!is.na(std_dev), estimate * std_dev, estimate),
+    # Definir níveis de significância
+    sig = case_when(
+      p.value < 0.01 ~ "***",
+      p.value < 0.05 ~ "**",
+      p.value < 0.1 ~ "*",
+      TRUE ~ ""
+    ),
+    # Renomear variáveis de acordo com o dicionário
+    term = ifelse(term %in% names(var_names), var_names[term], term)
+  )
+
+# Filtrar apenas colunas relevantes para a tabela
+resultados <- resultados %>%
+  dplyr::select(term, marginal_effect_sd, std.error, sig)
+
+# Gerar código LaTeX no formato especificado
+cat("\\begin{table}[!h]\n\\centering\n\\begin{tabular}{lc}\n\\toprule\n")
+cat("\\multicolumn{1}{c}{Dependent Variable: } & \\multicolumn{1}{c}{Employed Woman} \\\\\n")
+cat("\\cmidrule(l{3pt}r{3pt}){1-1} \\cmidrule(l{3pt}r{3pt}){2-2}\n & (1991)\\\\\n\\midrule\n")
+
+# Iterar sobre as linhas para formatar cada variável
+for (i in 1:nrow(resultados)) {
+  # Imprimir o nome da variável, efeito marginal ajustado e nível de significância
+  cat(resultados$term[i], "&", round(resultados$marginal_effect_sd[i], 4), resultados$sig[i], "\\\\\n")
+  # Imprimir o erro-padrão entre parênteses na linha abaixo
+  cat("& (", round(resultados$std.error[i], 4), ")\\\\\n")
+}
+
+# Adicionar informações sobre efeitos fixos e estatísticas de ajuste
+cat("\\midrule & \\\\\n\\emph{Fixed-effects} & \\\\\nMunic & Yes\\\\\n")
+cat("\\midrule & \\\\\n\\emph{Fit statistics} & \\\\\n")
+
+cat("Observations &", nobs(work_1991_4_probit), "\\\\\n")
+
+# Calcular e imprimir o Pseudo R²
+cat("Adj. Pseudo R$^2$ &", round(summary(work_1991_4_probit)$pseudo_r2, 4), "\\\\\n")
+cat("\\bottomrule\n")
+cat("\\multicolumn{2}{l}{\\rule{0pt}{1em}Clustered (State of Origin) sd in parentheses. Significance levels: *** $p<0.01$, ** $p<0.05$, * $p<0.1$}\\\\\n")
+cat("\\end{tabular}\n\\end{table}")
+```
+
+```{r 1991}
+etable(work_1991_1, work_1991_2, work_1991_3,work_1991_5, work_1991_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+### 2000
+#### only lfp 1980
+```{r work 2000 1}
+work_2000_1 <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + age_fem + age_squared_fem + age_sp|v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_1)
+etable(work_2000_1, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### lfp 1980 + woman's schooling
+```{r work 2000 2}
+work_2000_2 <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher+ age_fem + age_squared_fem + age_sp|v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_2)
+etable(work_2000_2, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### lfp 1980 + woman's schooling + spouse's schooling
+```{r work 2000 3}
+work_2000_3 <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + age_fem + age_squared_fem + age_sp+ income_sp_raw|v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_3)
+etable(work_2000_3, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### lfp 1980 + spouse's schooling
+```{r work 2000 5}
+work_2000_5 <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_5)
+etable(work_2000_5, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### everything
+```{r work 2000 4}
+work_2000_4 <- feols(ocupada_migrante_15~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4)
+etable(work_2000_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### everything: probit
+
+```{r work 2000 4 probit}
+work_2000_4_probit <- feglm(ocupada_migrante_15~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 | v0103, 
+                            data = data_2000, 
+                            weights = ~P001, 
+                            cluster = ~uf_nascim, 
+                            family = binomial(link = "probit"))
+summary(work_2000_4_probit)
+```
+
+```{r work 2000 4 probit table}
+var_names <- c(
+  "age_fem" = "Age (Woman)",
+  "age_sp" = "Age (Spouse)",
+  "age_squared_fem" = "Age Squared (Woman)",
+  "children_under_5" = "Children Under 5",
+  "em_homem" = "Primary Education (Spouse)",
+  "fund_homem" = "Secondary Education (Spouse)",
+  "income_sp_raw" = "Spouse's Income",
+  "lfp_uf_30_49_1980" = "LFP Rate 1980",
+  "superior_homem" = "Higher Education (Spouse)"
+)
+
+# Criar um data frame para armazenar os efeitos marginais ajustados por desvio padrão
+resultados <- avg_marginal_effects %>%
+  mutate(
+    # Calcular o desvio padrão para cada variável (somente para variáveis contínuas)
+    std_dev = sapply(term, function(var) {
+      if (is.numeric(data_2000[[var]])) {
+        return(sd(data_2000[[var]], na.rm = TRUE))
+      } else {
+        return(NA)
+      }
+    }),
+    # Calcular o efeito marginal ajustado para variáveis contínuas
+    marginal_effect_sd = ifelse(!is.na(std_dev), estimate * std_dev, estimate),
+    # Definir níveis de significância
+    sig = case_when(
+      p.value < 0.01 ~ "***",
+      p.value < 0.05 ~ "**",
+      p.value < 0.1 ~ "*",
+      TRUE ~ ""
+    ),
+    # Renomear variáveis de acordo com o dicionário
+    term = ifelse(term %in% names(var_names), var_names[term], term)
+  )
+
+# Filtrar apenas colunas relevantes para a tabela
+resultados <- resultados %>%
+  dplyr::select(term, marginal_effect_sd, std.error, sig)
+
+# Gerar código LaTeX no formato especificado
+cat("\\begin{table}[!h]\n\\centering\n\\begin{tabular}{lc}\n\\toprule\n")
+cat("\\multicolumn{1}{c}{Dependent Variable: } & \\multicolumn{1}{c}{Employed Woman} \\\\\n")
+cat("\\cmidrule(l{3pt}r{3pt}){1-1} \\cmidrule(l{3pt}r{3pt}){2-2}\n & (1991)\\\\\n\\midrule\n")
+
+# Iterar sobre as linhas para formatar cada variável
+for (i in 1:nrow(resultados)) {
+  # Imprimir o nome da variável, efeito marginal ajustado e nível de significância
+  cat(resultados$term[i], "&", round(resultados$marginal_effect_sd[i], 4), resultados$sig[i], "\\\\\n")
+  # Imprimir o erro-padrão entre parênteses na linha abaixo
+  cat("& (", round(resultados$std.error[i], 4), ")\\\\\n")
+}
+
+# Adicionar informações sobre efeitos fixos e estatísticas de ajuste
+cat("\\midrule & \\\\\n\\emph{Fixed-effects} & \\\\\nMunic & Yes\\\\\n")
+cat("\\midrule & \\\\\n\\emph{Fit statistics} & \\\\\n")
+
+cat("Observations &", nobs(work_2000_4_probit), "\\\\\n")
+
+# Calcular e imprimir o Pseudo R²
+cat("Adj. Pseudo R$^2$ &", round(summary(work_2000_4_probit)$pseudo_r2, 4), "\\\\\n")
+cat("\\bottomrule\n")
+cat("\\multicolumn{2}{l}{\\rule{0pt}{1em}Clustered (State of Origin) sd in parentheses. Significance levels: *** $p<0.01$, ** $p<0.05$, * $p<0.1$}\\\\\n")
+cat("\\end{tabular}\n\\end{table}")
+```
+
+
+#### everything
+```{r work 1980 4}
+work_2000_4 <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4)
+etable(work_2000_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### everything: probit
+
+```{r work 1980 4 probit}
+work_2000_4_probit <- feglm(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5 | v0103, 
+                            data = data_2000, 
+                            weights = ~P001, 
+                            cluster = ~uf_nascim, 
+                            family = binomial(link = "probit"))
+summary(work_2000_4_probit)
+marginais_probit <- slopes(work_2000_4_probit)
+summary(marginais_probit)
+
+```
+
+```{r 2000}
+etable(work_2000_1, work_2000_2, work_2000_3, work_2000_5, work_2000_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+### 2010
+#### only lfp 2010
+```{r work 2010 1}
+work_2010_1 <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + age_fem + age_squared_fem + age_sp |munic, data = data_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_1)
+etable(work_2010_1, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### lfp 2010 + woman's schooling
+```{r work 2010 2}
+work_2010_2 <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ age_fem + age_squared_fem + age_sp|munic, data = data_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_2)
+etable(work_2010_2, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### lfp 2010 + woman's schooling + spouse's schooling
+```{r work 2010 3}
+work_2010_3 <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp|munic, data = data_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_3)
+etable(work_2010_3, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### lfp 2010 + spouse's schooling
+```{r work 2010 5}
+work_2010_5 <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_5)
+etable(work_2010_5, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### everything
+```{r work 2010 4}
+work_2010_4 <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4)
+etable(work_2010_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### everything: probit
+
+```{r work 2010 4 probit}
+work_2010_4_probit <- feglm(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5 | munic, 
+                            data = data_2010, 
+                            weights = ~peso_pess, 
+                            cluster = ~uf_nascim, 
+                            family = binomial(link = "probit"))
+summary(work_2010_4_probit)
+marginais_probit <- slopes(work_2010_4_probit)
+summary(marginais_probit)
+```
+
+```{r 2010}
+etable(work_2010_1, work_2010_2, work_2010_3, work_2010_5, work_2010_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r 1991 2000 2010}
+etable(work_1991_5, work_2000_5, work_2010_5, work_1991_4, work_2000_4, work_2010_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+> # Robustness - work
+
+Tira UF com maior e menor LFP em 1970, 80 e 91.
+
+```{r robustez}
+###########
+# ROBUSTEZ
+###########
+
+## highest LFP
+## 1991
+data_without_53_1991 <- data_1991 |> # Brasilia
+  filter(uf_nascim != 53)
+
+## 2000
+data_without_53_2000 <- data_2000 |>  # Brasilia
+  filter(uf_nascim != 53)
+
+## 2010
+data_without_53_2010 <- data_2010 |>  # Brasilia
+  filter(uf_nascim != 53)
+
+## smallest LFP
+## 1991
+data_without_51_1991 <- data_1991 |> # Mato Grosso
+  filter(uf_nascim != 51)
+
+## 2000
+data_without_51_2000 <- data_2000 |>  # Mato Grosso
+  filter(uf_nascim != 51)
+
+## 2010
+data_without_17_2010 <- data_2010 |>  # Tocantins
+  filter(uf_nascim != 17)
+```
+
+## 1991
+```{r work 1991 4 rob higher lfp}
+work_1991_4_rob_higher_lfp <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_without_53_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4_rob_higher_lfp)
+etable(work_1991_4_rob_higher_lfp, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 1991 4 rob smallest lfp}
+work_1991_4_rob_smallest_lfp <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_without_51_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4_rob_smallest_lfp)
+etable(work_1991_4_rob_smallest_lfp, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+
+```{r work 1991 4 rob higher lfp no fem_educ}
+work_1991_5_rob_higher_lfp_no_fem_educ <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_without_53_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_5_rob_higher_lfp_no_fem_educ)
+etable(work_1991_5_rob_higher_lfp_no_fem_educ, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 1991 4 rob smallest lfp no fem_educ}
+work_1991_5_rob_smallest_lfp_no_fem_educ <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_without_51_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_5_rob_smallest_lfp_no_fem_educ)
+etable(work_1991_5_rob_smallest_lfp_no_fem_educ, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+```{r work 2000 4 rob higher lfp}
+work_2000_4_rob_higher_lfp <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_without_53_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4_rob_higher_lfp)
+etable(work_2000_4_rob_higher_lfp, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2000 4 rob smallest lfp}
+work_2000_4_rob_smallest_lfp <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_without_51_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4_rob_smallest_lfp)
+etable(work_2000_4_rob_smallest_lfp, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2000 4 rob higher lfp no fem_educ}
+work_2000_5_rob_higher_lfp_no_fem_educ <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_without_53_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_5_rob_higher_lfp_no_fem_educ)
+etable(work_2000_5_rob_higher_lfp_no_fem_educ, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2000 4 rob smallest lfp no fem_educ}
+work_2000_5_rob_smallest_lfp_no_fem_educ <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_without_51_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_5_rob_smallest_lfp_no_fem_educ)
+etable(work_2000_5_rob_smallest_lfp_no_fem_educ, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+```{r work 2010 4 rob higher lfp}
+work_2010_4_rob_higher_lfp <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_without_53_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4_rob_higher_lfp)
+etable(work_2010_4_rob_higher_lfp, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2010 4 rob smallest lfp}
+work_2010_4_rob_smallest_lfp <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_without_17_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4_rob_smallest_lfp)
+etable(work_2010_4_rob_smallest_lfp, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2010 4 rob higher lfp no fem_educ}
+work_2010_5_rob_higher_lfp_no_fem_educ <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_without_53_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_5_rob_higher_lfp_no_fem_educ)
+etable(work_2010_5_rob_higher_lfp_no_fem_educ, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2010 4 rob smallest lfp no fem_educ}
+work_2010_5_rob_smallest_lfp_no_fem_educ <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_without_17_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_5_rob_smallest_lfp_no_fem_educ)
+etable(work_2010_5_rob_smallest_lfp_no_fem_educ, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r 1991 2000 2010 rob higher LFP}
+etable(work_1991_4_rob_higher_lfp, work_1991_5_rob_higher_lfp_no_fem_educ, work_2000_4_rob_higher_lfp, work_2000_5_rob_higher_lfp_no_fem_educ, work_2010_4_rob_higher_lfp,work_2010_5_rob_higher_lfp_no_fem_educ, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r 1991 2000 2010 rob smallest LFP}
+etable(work_1991_4_rob_smallest_lfp, work_1991_5_rob_smallest_lfp_no_fem_educ, work_2000_4_rob_smallest_lfp, work_2000_5_rob_smallest_lfp_no_fem_educ, work_2010_4_rob_smallest_lfp, work_2010_5_rob_smallest_lfp_no_fem_educ, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+> # Robustness - work age
+
+Mulheres somente entre 40-49 anos
+
+## 1991
+```{r work 1991 4 age 40-49}
+work_1991_4_rob_40_49 <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_40_49_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4_rob_40_49)
+etable(work_1991_4_rob_40_49, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 1991 4 age 40-49 no fem educ}
+work_1991_5_rob_40_49_no_fem_educ <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_40_49_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_5_rob_40_49_no_fem_educ)
+etable(work_1991_5_rob_40_49_no_fem_educ, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+```{r work 2000 4 age 40-49}
+work_2000_4_rob_40_49 <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_40_49_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4_rob_40_49)
+etable(work_2000_4_rob_40_49, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2000 4 age 40-49 no fem_educ}
+work_2000_5_rob_40_49_no_fem_educ <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_40_49_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_5_rob_40_49_no_fem_educ)
+etable(work_2000_5_rob_40_49_no_fem_educ, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+```{r work 2010 4 age 40-49}
+work_2010_4_rob_40_49 <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_40_49_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4_rob_40_49)
+etable(work_2010_4_rob_40_49, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2010 4 age 40-49 no fem_educ}
+work_2010_5_rob_40_49_no_fem_educ <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_40_49_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_5_rob_40_49_no_fem_educ)
+etable(work_2010_5_rob_40_49_no_fem_educ, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r 1991 2000 2010 rob }
+etable(work_1991_4_rob_40_49,work_1991_5_rob_40_49_no_fem_educ, work_2000_4_rob_40_49, work_2000_5_rob_40_49_no_fem_educ, work_2010_4_rob_40_49,work_2010_5_rob_40_49_no_fem_educ, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+
+> # Race
+
+With female education.
+## 1991
+```{r work 1991 4 white}
+work_1991_4_white <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_white_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4_white)
+etable(work_1991_4_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 1991 4 black/brown}
+work_1991_4_black <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_black_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4_black)
+etable(work_1991_4_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+```{r work 2000 4 white}
+work_2000_4_white <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_white_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4_white)
+etable(work_2000_4_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2000 4 black/brown}
+work_2000_4_black <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_black_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4_black)
+etable(work_2000_4_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+```{r work 2010 4 white}
+work_2010_4_white <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_white_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4_white)
+etable(work_2010_4_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2010 4 black/brown}
+work_2010_4_black <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_black_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4_black)
+etable(work_2010_4_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r 1991 2000 2010 race}
+etable(
+  work_1991_4_white, work_1991_4_black,
+  work_2000_4_white, work_2000_4_black,
+  work_2010_4_white, work_2010_4_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+Without female education.
+## 1991
+```{r work 1991 4 white no fem educ}
+work_1991_5_white_no_fem_educ <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_white_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_5_white_no_fem_educ)
+etable(work_1991_5_white_no_fem_educ, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 1991 4 black/brown no fem educ}
+work_1991_5_black_no_fem_educ <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_black_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_5_black_no_fem_educ)
+etable(work_1991_5_black_no_fem_educ, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+```{r work 2000 4 white no fem educ}
+work_2000_5_white_no_fem_educ <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_white_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_5_white_no_fem_educ)
+etable(work_2000_5_white_no_fem_educ, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2000 4 black/brown no fem educ}
+work_2000_5_black_no_fem_educ <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_black_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_5_black_no_fem_educ)
+etable(work_2000_5_black_no_fem_educ, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+```{r work 2010 4 white no fem educ}
+work_2010_5_white_no_fem_educ <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_white_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_5_white_no_fem_educ)
+etable(work_2010_5_white_no_fem_educ, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2010 4 black/brown no fem educ}
+work_2010_5_black_no_fem_educ <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_black_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_5_black_no_fem_educ)
+etable(work_2010_5_black_no_fem_educ, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r 1991 2000 2010 race no fem educ}
+etable(
+  work_1991_5_white_no_fem_educ, work_1991_5_black_no_fem_educ,
+  work_2000_5_white_no_fem_educ, work_2000_5_black_no_fem_educ,
+  work_2010_5_white_no_fem_educ, work_2010_5_black_no_fem_educ, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+
+> # Robustness - work race
+
+Tira UF com maior e menor LFP em 1970, 80 e 91.
+
+With female education.
+## 1991
+```{r work 1991 4 rob higher lfp white}
+work_1991_4_rob_higher_lfp_white <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_white_without_53_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4_rob_higher_lfp_white)
+etable(work_1991_4_rob_higher_lfp_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 1991 4 rob smallest lfp white}
+work_1991_4_rob_smallest_lfp_white <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_white_without_51_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4_rob_smallest_lfp_white)
+etable(work_1991_4_rob_smallest_lfp_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 1991 4 rob higher lfp black}
+work_1991_4_rob_higher_lfp_black <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_black_without_53_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4_rob_higher_lfp_black)
+etable(work_1991_4_rob_higher_lfp_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 1991 4 rob smallest lfp black}
+work_1991_4_rob_smallest_lfp_black <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_black_without_51_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4_rob_smallest_lfp_black)
+etable(work_1991_4_rob_smallest_lfp_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+```{r work 2000 4 rob higher lfp white}
+work_2000_4_rob_higher_lfp_white <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_white_without_53_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4_rob_higher_lfp_white)
+etable(work_2000_4_rob_higher_lfp_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2000 4 rob smallest lfp white}
+work_2000_4_rob_smallest_lfp_white <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_white_without_51_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4_rob_smallest_lfp_white)
+etable(work_2000_4_rob_smallest_lfp_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2000 4 rob smallest lfp black}
+work_2000_4_rob_higher_lfp_black <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_black_without_53_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4_rob_higher_lfp_black)
+etable(work_2000_4_rob_higher_lfp_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2000 4 rob smallest lfp black}
+work_2000_4_rob_smallest_lfp_black <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_black_without_51_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4_rob_higher_lfp_black)
+etable(work_2000_4_rob_higher_lfp_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+```{r work 2010 4 rob higher lfp white}
+work_2010_4_rob_higher_lfp_white <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_white_without_53_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4_rob_higher_lfp_white)
+etable(work_2010_4_rob_higher_lfp_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2010 4 rob higher lfp white}
+work_2010_4_rob_smallest_lfp_white <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_white_without_17_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4_rob_smallest_lfp_white)
+etable(work_2010_4_rob_smallest_lfp_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2010 4 rob higher lfp black}
+work_2010_4_rob_higher_lfp_black <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_black_without_53_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4_rob_higher_lfp_black)
+etable(work_2010_4_rob_higher_lfp_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2010 4 rob smallest lfp black}
+work_2010_4_rob_smallest_lfp_black <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_black_without_17_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4_rob_smallest_lfp_black)
+etable(work_2010_4_rob_smallest_lfp_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r 1991 2000 2010 race rob highest lfp}
+etable(
+  work_1991_4_rob_higher_lfp_white, work_1991_4_rob_higher_lfp_black, 
+  work_2000_4_rob_higher_lfp_white, work_2000_4_rob_higher_lfp_black, 
+  work_2010_4_rob_higher_lfp_white, work_2010_4_rob_higher_lfp_black,  tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r 1991 2000 2010 race rob smallest lfp}
+etable(
+  work_1991_4_rob_smallest_lfp_white, work_1991_4_rob_smallest_lfp_black,
+  work_2000_4_rob_smallest_lfp_white, work_2000_4_rob_smallest_lfp_black,
+  work_2010_4_rob_smallest_lfp_white, work_2010_4_rob_smallest_lfp_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+
+Without female education.
+## 1991
+```{r work no fem educ 1991 4 rob higher lfp white}
+work_1991_5_rob_higher_lfp_white <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_white_without_53_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_5_rob_higher_lfp_white)
+etable(work_1991_5_rob_higher_lfp_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work no fem educ 1991 4 rob smallest lfp white}
+work_1991_5_rob_smallest_lfp_white <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_white_without_51_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_5_rob_smallest_lfp_white)
+etable(work_1991_5_rob_smallest_lfp_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work no fem educ 1991 4 rob higher lfp black}
+work_1991_5_rob_higher_lfp_black <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_black_without_53_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_5_rob_higher_lfp_black)
+etable(work_1991_5_rob_higher_lfp_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work no fem educ 1991 4 rob smallest lfp black}
+work_1991_5_rob_smallest_lfp_black <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + children_under_5 |V1102, data = data_black_without_51_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_5_rob_smallest_lfp_black)
+etable(work_1991_5_rob_smallest_lfp_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+```{r work no fem educ 2000 4 rob higher lfp white}
+work_2000_5_rob_higher_lfp_white <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_white_without_53_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_5_rob_higher_lfp_white)
+etable(work_2000_5_rob_higher_lfp_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work no fem educ 2000 4 rob smallest lfp white}
+work_2000_5_rob_smallest_lfp_white <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_white_without_51_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_5_rob_smallest_lfp_white)
+etable(work_2000_5_rob_smallest_lfp_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work no fem educ 2000 4 rob smallest lfp black}
+work_2000_5_rob_higher_lfp_black <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_black_without_53_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_5_rob_higher_lfp_black)
+etable(work_2000_5_rob_higher_lfp_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work no fem educ 2000 4 rob smallest lfp black}
+work_2000_5_rob_smallest_lfp_black <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + children_under_5|v0103, data = data_black_without_51_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_5_rob_higher_lfp_black)
+etable(work_2000_5_rob_higher_lfp_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+```{r work no fem educ 2010 4 rob higher lfp white}
+work_2010_5_rob_higher_lfp_white <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_white_without_53_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_5_rob_higher_lfp_white)
+etable(work_2010_5_rob_higher_lfp_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work no fem educ 2010 4 rob higher lfp white}
+work_2010_5_rob_smallest_lfp_white <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_white_without_17_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_5_rob_smallest_lfp_white)
+etable(work_2010_5_rob_smallest_lfp_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work no fem educ 2010 4 rob higher lfp black}
+work_2010_5_rob_higher_lfp_black <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_black_without_53_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_5_rob_higher_lfp_black)
+etable(work_2010_5_rob_higher_lfp_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work no fem educ 2010 4 rob smallest lfp black}
+work_2010_5_rob_smallest_lfp_black <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp +children_under_5|munic, data = data_black_without_17_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_5_rob_smallest_lfp_black)
+etable(work_2010_5_rob_smallest_lfp_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r 1991 2000 2010 race rob highest lfp no fem educ}
+etable(
+  work_1991_5_rob_higher_lfp_white, work_1991_5_rob_higher_lfp_black, 
+  work_2000_5_rob_higher_lfp_white, work_2000_5_rob_higher_lfp_black, 
+  work_2010_5_rob_higher_lfp_white, work_2010_5_rob_higher_lfp_black,  tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r 1991 2000 2010 race rob smallest lfp no fem educ}
+etable(
+  work_1991_5_rob_smallest_lfp_white, work_1991_5_rob_smallest_lfp_black,
+  work_2000_5_rob_smallest_lfp_white, work_2000_5_rob_smallest_lfp_black,
+  work_2010_5_rob_smallest_lfp_white, work_2010_5_rob_smallest_lfp_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+
+> # Avaliando o impacto da tfr da UF de origem sobre o número de filhos da mulher migrante-------------------------------------
+
+## Number of children
+
+```{r variables in latex children}
+var_labels <- c(
+  "children" = "Children",
+  "tfr_1970" = "TFR (1970)",
+  "tfr_1980" = "TFR (1980)",
+  "tfr_1991" = "TFR (1991)",
+  "fund_mulher" = "Basic Education (Wife)",
+  "em_mulher" = "High School (Wife)",
+  "superior_mulher" = "Higher Education (Wife)",
+  "fund_homem" = "Basic Education (Spouse)",
+  "em_homem" = "High School (Spouse)",
+  "superior_homem" = "Higher Education (Spouse)",
+  "income_sp_raw" = "Income (Spouse)",
+  "age_fem" = "Age (Wife)",
+  "age_squared_fem" = "Age Squared (Wife)",
+  "age_sp" = "Age (Spouse)",
+  "V1102" = "Munic 1991",
+  "v0103" = "Munic 2000",
+  "munic" = "Munic 2010",
+  "uf_nascim" = "State of Birth"
+)
+```
+
+### 1991
+
+#### only tfr 1991
+```{r children 1991 1}
+children_1991_1 <- feols(children~ tfr_1970+ age_fem + age_squared_fem + age_sp|V1102, data = data_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_1)
+etable(children_1991_1, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1970 1}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_1970_1 <- weighted_sd(data_1991$tfr_1970, data_1991$V7301)
+coef_tfr_1970_1 <- coef(children_1991_1)["tfr_1970"]
+impacto_1sd_1970_1 <- coef_tfr_1970_1 * sd_tfr_1970_1
+impacto_1sd_1970_1
+```
+
+#### tfr 1991 + woman's schooling
+```{r children 1991 2}
+children_1991_2 <- feols(children~ tfr_1970 + fund_mulher + em_mulher + superior_mulher+ age_fem + age_squared_fem + age_sp|V1102, data = data_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_2)
+etable(children_1991_2, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1970 2}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_1970_2 <- weighted_sd(data_1991$tfr_1970, data_1991$V7301)
+coef_tfr_1970_2 <- coef(children_1991_2)["tfr_1970"]
+impacto_1sd_1970_2 <- coef_tfr_1970_2 * sd_tfr_1970_2
+impacto_1sd_1970_2
+```
+
+#### tfr 1991 + woman's schooling + spouse's schooling
+```{r children 1991 3}
+children_1991_3 <- feols(children~ tfr_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + age_fem + age_squared_fem + age_sp+ income_sp_raw|V1102, data = data_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_3)
+etable(children_1991_3, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1970 3}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_1970_3 <- weighted_sd(data_1991$tfr_1970, data_1991$V7301)
+coef_tfr_1970_3 <- coef(children_1991_3)["tfr_1970"]
+impacto_1sd_1970_3 <- coef_tfr_1970_3 * sd_tfr_1970_3
+impacto_1sd_1970_3
+```
+
+#### tfr 1991 + spouse's schooling
+```{r children 1991 5}
+children_1991_5 <- feols(children~ tfr_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |V1102, data = data_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_5)
+etable(children_1991_5, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1970 5}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_1970_5<- weighted_sd(data_1991$tfr_1970, data_1991$V7301)
+coef_tfr_1970_5 <- coef(children_1991_5)["tfr_1970"]
+impacto_1sd_1970_5 <- coef_tfr_1970_5 * sd_tfr_1970_5
+impacto_1sd_1970_5
+
+```
+
+#### everything
+```{r children 1991 4}
+children_1991_4 <- feols(children~ tfr_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |V1102, data = data_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4)
+etable(children_1991_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1970 4}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_1970_4 <- weighted_sd(data_1991$tfr_1970, data_1991$V7301)
+coef_tfr_1970_4 <- coef(children_1991_4)["tfr_1970"]
+impacto_1sd_1970_4 <- coef_tfr_1970_4 * sd_tfr_1970_4
+impacto_1sd_1970_4
+```
+
+```{r 1991}
+etable(children_1991_1, children_1991_2, children_1991_5, children_1991_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+### Graph 1991
+```{r graph 1991}
+models <- c("children_1991_1", "children_1991_2",  "children_1991_5", "children_1991_4")
+coef_values <- c(impacto_1sd_1970_1, impacto_1sd_1970_2, impacto_1sd_1970_5, impacto_1sd_1970_4)   # coeficientes de tfr_1970 para cada modelo
+se_values <- c(sd_tfr_1970_1, sd_tfr_1970_2, sd_tfr_1970_5, sd_tfr_1970_4)    # erros padrão correspondentes
+
+# Calcule automaticamente os intervalos de confiança de 95%
+ci_lower_values <- coef_values - 1.96 * se_values
+ci_upper_values <- coef_values + 1.96 * se_values
+
+# Crie o dataframe com os resultados
+regression_results <- data.frame(
+  model = models,
+  coef = coef_values,
+  ci_lower = ci_lower_values,
+  ci_upper = ci_upper_values
+)
+
+# Exibir o dataframe
+print(regression_results)
+
+# Plot de resultados tfr
+ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(color = "blue", size = 2) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2, color = "black") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  labs(x = "Model", y = "Coefficient of TFR_1970",
+       title = "TFR_1970 Coefficients") +
+  theme_minimal()
+
+# Calcule a média dos coeficientes para a linha de referência
+mean_coef <- mean(regression_results$coef)
+
+# Gráfico com estilo ajustado
+children_1991 <- ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(color = "darkcyan", size = 3) +  # Ajuste da cor e tamanho dos pontos
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2, color = "gray40") +
+  geom_hline(yintercept = mean_coef, linetype = "solid", color = "red", size = 0.8) +  # Linha média
+  geom_hline(yintercept = mean_coef + 0.1, linetype = "dashed", color = "black") +  # Limite superior tracejado
+  geom_hline(yintercept = mean_coef - 0.1, linetype = "dashed", color = "black") +  # Limite inferior tracejado
+  geom_hline(yintercept = 0, linetype = "dotted", color = "blue") +  # Linha de referência em zero
+  labs(x = "Model Especifications", y = "Increase in the Number of Children",
+       title = "Migrant Fertility - 1991",
+      subtitle = "A one sd increase in 1970 TFR is associated with an increase in migrant fertility in 1991."
+) +
+  scale_x_discrete(
+    labels = c("1991 (1)", "1991 (2)", "1991 (3)", "1991 (4)", "1991 (5)")  # Renomeia os valores no eixo x
+  ) +
+  geom_text(aes(label = round(coef, 3)), vjust = -1.5, color = "darkcyan", size = 4) +  # Adiciona os valores dos coeficientes
+  theme_minimal() +  # Ensure a light background theme
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),  # Set background to white
+    panel.background = element_rect(fill = "white", color = NA)  # Set panel background to white
+  )
+# Save the plot with a specified file path
+ggsave(filename = "D:/1_migration/4_results_migrants/graphs/fertility_1991.png", 
+       plot = children_1991, 
+       width = 10, height = 6, dpi = 300)
+
+```
+
+
+### 2000
+#### only tfr 1980
+```{r children 1980 1}
+children_2000_1 <- feols(children ~ tfr_1980 + age_fem + age_squared_fem + age_sp|v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_1)
+etable(children_2000_1, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1980 1}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_1980_1 <- weighted_sd(data_2000$tfr_1980, data_2000$P001)
+coef_tfr_1980_1 <- coef(children_2000_1)["tfr_1980"]
+impacto_1sd_1980_1 <- coef_tfr_1980_1 * sd_tfr_1980_1
+impacto_1sd_1980_1
+```
+
+#### tfr 1980 + woman's schooling
+```{r children 1980 2}
+children_2000_2 <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher+ age_fem + age_squared_fem + age_sp|v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_2)
+etable(children_2000_2, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1980 2}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_1980_2 <- weighted_sd(data_2000$tfr_1980, data_2000$P001)
+coef_tfr_1980_2 <- coef(children_2000_2)["tfr_1980"]
+impacto_1sd_1980_2 <- coef_tfr_1980_2 * sd_tfr_1980_2
+impacto_1sd_1980_2
+```
+
+#### tfr 1980 + woman's schooling + spouse's schooling
+```{r children 1980 3}
+children_2000_3 <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + age_fem + age_squared_fem + age_sp+ income_sp_raw|v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_3)
+etable(children_2000_3, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1980 3}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_1980_3 <- weighted_sd(data_2000$tfr_1980, data_2000$P001)
+coef_tfr_1980_3 <- coef(children_2000_3)["tfr_1980"]
+impacto_1sd_1980_3 <- coef_tfr_1980_3 * sd_tfr_1980_3
+impacto_1sd_1980_3
+```
+
+#### tfr 1980 + spouse's schooling
+```{r children 1980 5}
+children_2000_5 <- feols(children ~ tfr_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp|v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_5)
+etable(children_2000_5, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1980 5}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_1980_5 <- weighted_sd(data_2000$tfr_1980, data_2000$P001)
+coef_tfr_1980_5 <- coef(children_2000_5)["tfr_1980"]
+impacto_1sd_1980_5 <- coef_tfr_1980_5 * sd_tfr_1980_5
+impacto_1sd_1980_5
+```
+
+#### everything
+```{r children 1980 4}
+children_2000_4 <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp|v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4)
+etable(children_2000_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1980 4}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_1980_4 <- weighted_sd(data_2000$tfr_1980, data_2000$P001)
+coef_tfr_1980_4 <- coef(children_2000_4)["tfr_1980"]
+impacto_1sd_1980_4 <- coef_tfr_1980_4 * sd_tfr_1980_4
+impacto_1sd_1980_4
+```
+
+```{r 2000}
+etable(children_2000_1, children_2000_2, children_2000_5, children_2000_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+### Graph 2000
+
+```{r graph 2000}
+models <- c("children_2000_1", "children_2000_2", "children_2000_5", "children_2000_4")
+coef_values <- c(impacto_1sd_1980_1, impacto_1sd_1980_2, impacto_1sd_1980_5, impacto_1sd_1980_4)   # coeficientes de tfr_2000 para cada modelo
+se_values <- c(sd_tfr_1980_1, sd_tfr_1980_2, sd_tfr_1980_5, sd_tfr_1980_4)    # erros padrão correspondentes
+
+# Calcule automaticamente os intervalos de confiança de 95%
+ci_lower_values <- coef_values - 1.96 * se_values
+ci_upper_values <- coef_values + 1.96 * se_values
+
+# Crie o dataframe com os resultados
+regression_results <- data.frame(
+  model = models,
+  coef = coef_values,
+  ci_lower = ci_lower_values,
+  ci_upper = ci_upper_values
+)
+
+# Exibir o dataframe
+print(regression_results)
+
+# Plot de resultados tfr
+ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(color = "blue", size = 2) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2, color = "black") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  labs(x = "Model", y = "Coefficient of TFR_2000",
+       title = "TFR_2000 Coefficients") +
+  theme_minimal()
+
+# Calcule a média dos coeficientes para a linha de referência
+mean_coef <- mean(regression_results$coef)
+
+# Gráfico com estilo ajustado
+children_2000 <- ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(color = "darkcyan", size = 3) +  # Ajuste da cor e tamanho dos pontos
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2, color = "gray40") +
+  geom_hline(yintercept = mean_coef, linetype = "solid", color = "red", size = 0.8) +  # Linha média
+  geom_hline(yintercept = mean_coef + 0.1, linetype = "dashed", color = "black") +  # Limite superior tracejado
+  geom_hline(yintercept = mean_coef - 0.1, linetype = "dashed", color = "black") +  # Limite inferior tracejado
+  geom_hline(yintercept = 0, linetype = "dotted", color = "blue") +  # Linha de referência em zero
+  labs(x = "Model Especifications", y = "Increase in the Number of Children",
+       title = "Migrant Fertility - 2000",
+      subtitle = "A one sd increase in 1980 TFR is associated with an increase in migrant fertility in 2000."
+) +
+  scale_x_discrete(
+    labels = c("2000 (1)", "2000 (2)", "2000 (3)", "2000 (4)", "2000 (5)")  # Renomeia os valores no eixo x
+  ) +
+  geom_text(aes(label = round(coef, 3)), vjust = -1.5, color = "darkcyan", size = 4) +  # Adiciona os valores dos coeficientes
+  theme_minimal() +  # Ensure a light background theme
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),  # Set background to white
+    panel.background = element_rect(fill = "white", color = NA)  # Set panel background to white
+  )
+# Save the plot with a specified file path
+ggsave(filename = "D:/1_migration/4_results_migrants/graphs/fertility_2000.png", 
+       plot = children_2000, 
+       width = 10, height = 6, dpi = 300)
+```
+
+### 2010
+#### only tfr 2010
+```{r children 2010 1}
+children_2010_1 <- feols(children ~ tfr_1991 + age_fem + age_squared_fem + age_sp |munic, data = data_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_1)
+etable(children_2010_1, tex = TRUE, dict = var_labels, digits = "r4")
+
+```
+
+```{r sd tfr_1991 1}
+# Função para calcular o desvio padrão ponderado
+weighted_sd <- function(x, w) {
+  # Calcula a média ponderada
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  # Calcula o desvio padrão ponderado
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+# Calcule o desvio padrão ponderado de `tfr_1991`
+sd_tfr_1991_1 <- weighted_sd(data_2010$tfr_1991, data_2010$peso_pess)
+coef_tfr_1991_1 <- coef(children_2010_1)["tfr_1991"]
+impacto_1sd_1991_1 <- coef_tfr_1991_1 * sd_tfr_1991_1
+impacto_1sd_1991_1
+```
+
+#### tfr 2010 + woman's schooling
+```{r children 2010 2}
+children_2010_2 <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ age_fem + age_squared_fem + age_sp |munic, data = data_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_2)
+etable(children_2010_2, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1991 2}
+# Função para calcular o desvio padrão ponderado
+weighted_sd <- function(x, w) {
+  # Calcula a média ponderada
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  # Calcula o desvio padrão ponderado
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+# Calcule o desvio padrão ponderado de `tfr_1991`
+sd_tfr_1991_2 <- weighted_sd(data_2010$tfr_1991, data_2010$peso_pess)
+coef_tfr_1991_2 <- coef(children_2010_2)["tfr_1991"]
+impacto_1sd_1991_2 <- coef_tfr_1991_2 * sd_tfr_1991_2
+impacto_1sd_1991_2
+```
+
+#### tfr 2010 + woman's schooling + spouse's schooling
+```{r children 2010 3}
+children_2010_3 <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |munic, data = data_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_3)
+etable(children_2010_3, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1991 3}
+# Função para calcular o desvio padrão ponderado
+weighted_sd <- function(x, w) {
+  # Calcula a média ponderada
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  # Calcula o desvio padrão ponderado
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+# Calcule o desvio padrão ponderado de `tfr_1991`
+sd_tfr_1991_3 <- weighted_sd(data_2010$tfr_1991, data_2010$peso_pess)
+coef_tfr_1991_3 <- coef(children_2010_3)["tfr_1991"]
+impacto_1sd_1991_3 <- coef_tfr_1991_3 * sd_tfr_1991_3
+impacto_1sd_1991_3
+```
+
+
+#### tfr 2010 + spouse's schooling
+```{r children 2010 5}
+children_2010_5 <- feols(children ~ tfr_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |munic, data = data_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_5)
+etable(children_2010_5, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1991 5}
+# Função para calcular o desvio padrão ponderado
+weighted_sd <- function(x, w) {
+  # Calcula a média ponderada
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  # Calcula o desvio padrão ponderado
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+# Calcule o desvio padrão ponderado de `tfr_1991`
+sd_tfr_1991_5 <- weighted_sd(data_2010$tfr_1991, data_2010$peso_pess)
+
+coef_tfr_1991_5 <- coef(children_2010_5)["tfr_1991"]
+impacto_1sd_1991_5 <- coef_tfr_1991_5 * sd_tfr_1991_5
+impacto_1sd_1991_5
+```
+
+
+#### everything
+```{r children 2010 4}
+children_2010_4 <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |munic, data = data_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4)
+etable(children_2010_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1991 4}
+
+# Função para calcular o desvio padrão ponderado
+weighted_sd <- function(x, w) {
+  # Calcula a média ponderada
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  # Calcula o desvio padrão ponderado
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+# Calcule o desvio padrão ponderado de `tfr_1991`
+sd_tfr_1991_4 <- weighted_sd(data_2010$tfr_1991, data_2010$peso_pess)
+
+coef_tfr_1991_4 <- coef(children_2010_4)["tfr_1991"]
+impacto_1sd_1991_4 <- coef_tfr_1991_4 * sd_tfr_1991_4
+impacto_1sd_1991_4
+```
+
+
+```{r 2010}
+etable(children_2010_1, children_2010_2, children_2010_5, children_2010_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+### Graph 2010
+```{r graph 2010}
+models <- c("children_2010_1", "children_2010_2", "children_2010_5", "children_2010_4")
+coef_values <- c(impacto_1sd_1991_1, impacto_1sd_1991_2, impacto_1sd_1991_5, impacto_1sd_1991_4)   # coeficientes de tfr_2010 para cada modelo
+se_values <- c(sd_tfr_1991_1, sd_tfr_1991_2, sd_tfr_1991_5, sd_tfr_1991_4)    # erros padrão correspondentes
+
+# Calcule automaticamente os intervalos de confiança de 95%
+ci_lower_values <- coef_values - 1.96 * se_values
+ci_upper_values <- coef_values + 1.96 * se_values
+
+# Crie o dataframe com os resultados
+regression_results <- data.frame(
+  model = models,
+  coef = coef_values,
+  ci_lower = ci_lower_values,
+  ci_upper = ci_upper_values
+)
+
+# Exibir o dataframe
+print(regression_results)
+
+# Plot de resultados tfr
+ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(color = "blue", size = 2) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2, color = "black") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  labs(x = "Model", y = "Coefficient of TFR_1991",
+       title = "TFR_1980 Coefficients") +
+  theme_minimal()
+
+# Calcule a média dos coeficientes para a linha de referência
+mean_coef <- mean(regression_results$coef)
+
+# Gráfico com estilo ajustado
+children_2010 <- ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(color = "darkcyan", size = 3) +  # Ajuste da cor e tamanho dos pontos
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2, color = "gray40") +
+  geom_hline(yintercept = mean_coef, linetype = "solid", color = "red", size = 0.8) +  # Linha média
+  geom_hline(yintercept = mean_coef + 0.1, linetype = "dashed", color = "black") +  # Limite superior tracejado
+  geom_hline(yintercept = mean_coef - 0.1, linetype = "dashed", color = "black") +  # Limite inferior tracejado
+  geom_hline(yintercept = 0, linetype = "dotted", color = "blue") +  # Linha de referência em zero
+  labs(x = "Model Especifications", y = "Increase in the Number of Children",
+       title = "Migrant Fertility - 2010",
+      subtitle = "A one sd increase in 1991 TFR is associated with an increase in migrant fertility in 2010."
+) +
+  scale_x_discrete(
+    labels = c("2010 (1)", "2010 (2)", "2010 (3)", "2010 (4)")  # Renomeia os valores no eixo x
+  ) +
+  geom_text(aes(label = round(coef, 3)), vjust = -1.5, color = "darkcyan", size = 4) +  # Adiciona os valores dos coeficientes
+  theme_minimal() +  # Ensure a light background theme
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),  # Set background to white
+    panel.background = element_rect(fill = "white", color = NA)  # Set panel background to white
+  )
+# Save the plot with a specified file path
+ggsave(filename = "D:/1_migration/4_results_migrants/graphs/fertility_2010.png", 
+       plot = children_2010, 
+       width = 10, height = 6, dpi = 300)
+```
+
+
+#### altogether
+
+```{r 1991 2000 2010}
+etable(children_1991_5, children_1991_4, children_2000_5, children_2000_4, children_2010_5, children_2010_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+### Graph 1991, 2000 and 2010
+```{r graph all}
+models <- c("children_1991_5", "children_1991_4", "children_2000_5", "children_2000_4", "children_2010_5",   "children_2010_4")
+coef_values <- c(impacto_1sd_1970_5, impacto_1sd_1970_4, impacto_1sd_1980_5, impacto_1sd_1980_4, impacto_1sd_1991_5, impacto_1sd_1991_4)   # coeficientes de tfr_2000 para cada modelo
+se_values <- c(sd_tfr_1970_5, sd_tfr_1970_4, sd_tfr_1980_5, sd_tfr_1980_4, sd_tfr_1991_5, sd_tfr_1991_4)    # erros padrão correspondentes
+
+# Calcule automaticamente os intervalos de confiança de 95%
+ci_lower_values <- coef_values - 1.96 * se_values
+ci_upper_values <- coef_values + 1.96 * se_values
+
+# Crie o dataframe com os resultados
+regression_results <- data.frame(
+  model = models,
+  coef = coef_values,
+  ci_lower = ci_lower_values,
+  ci_upper = ci_upper_values
+)
+
+# Exibir o dataframe
+print(regression_results)
+
+# Plot de resultados tfr
+ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(color = "blue", size = 2) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2, color = "black") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  labs(x = "Model", y = "Coefficient of TFR",
+       title = "TFR_1980 Coefficients") +
+  theme_minimal()
+
+# Calcule a média dos coeficientes para a linha de referência
+mean_coef <- mean(regression_results$coef)
+
+# Gráfico com estilo ajustado e legendas aprimoradas
+children_all_main <- ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(color = "darkcyan", size = 3) +  # Ajuste da cor e tamanho dos pontos
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2, color = "gray40") +
+  geom_hline(yintercept = mean_coef, linetype = "solid", color = "red", size = 0.8) +  # Linha média
+  #geom_hline(yintercept = mean_coef + 0.1, linetype = "dashed", color = "black") +  # Limite superior tracejado
+  #geom_hline(yintercept = mean_coef - 0.1, linetype = "dashed", color = "black") +  # Limite inferior tracejado
+
+  geom_hline(yintercept = 0, linetype = "dotted", color = "blue") +  # Linha de referência em zero
+  labs(
+    x = "Model Specifications",  # Rótulo do eixo x
+    y = "Increase in the Number of Children",  # Rótulo do eixo y
+    title = "Migrant Fertility - 1991, 2000 and 2010",  # Título do gráfico
+    subtitle = "A one sd increase TFR (1970, 1980 and 1991) is associated with an increase in migrant fertility."  # Subtítulo do gráfico
+  ) +
+  scale_x_discrete(
+    labels = c("1991 (3)", "1991 (4)", "2000 (3)", "2000 (4)", "2010 (3)", "2010 (4)")  # Renomeia os valores no eixo x
+  ) +
+  geom_text(aes(label = round(coef, 3)), vjust = -1.5, color = "darkcyan", size = 4) +  # Adiciona os valores dos coeficientes
+  theme_minimal() +  # Ensure a light background theme
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),  # Set background to white
+    panel.background = element_rect(fill = "white", color = NA)  # Set panel background to white
+  )
+# Save the plot with a specified file path
+ggsave(filename = "D:/1_migration/4_results_migrants/graphs/fertility_all_main.png", 
+       plot = children_all_main, 
+       width = 10, height = 6, dpi = 300)
+
+
+```
+
+```{r elasticities children all}
+mean_children_1991 <- weighted.mean(data_1991$children, w = data_1991$V7301, na.rm = TRUE)
+mean_children_2000 <- mean(data_2000$children, w = data_2000$P001, na.rm = TRUE)
+mean_children_2010 <- mean(data_2010$children, w = data_2010$peso_pess, na.rm = TRUE)
+
+mean_tfr_1970 <- 5.76
+mean_tfr_1980 <- 4.12
+mean_tfr_1991 <- 2.73
+
+# 1991
+coef_tfr_1970_4 <- coef(children_1991_4)["tfr_1970"]
+elasticidade_tfr_1970_4 <- coef_tfr_1970_4 * (mean_tfr_1970 / mean_children_1991)
+
+coef_tfr_1970_5 <- coef(children_1991_5)["tfr_1970"]
+elasticidade_tfr_1970_5 <- coef_tfr_1970_5 * (mean_tfr_1970 / mean_children_1991)
+
+# 2000
+coef_tfr_1980_4 <- coef(children_2000_4)["tfr_1980"]
+elasticidade_tfr_1980_4 <- coef_tfr_1980_4 * (mean_tfr_1980 / mean_children_2000)
+coef_tfr_1980_5 <- coef(children_2000_5)["tfr_1980"]
+elasticidade_tfr_1980_5 <- coef_tfr_1980_5 * (mean_tfr_1980 / mean_children_2000)
+
+# 2010
+coef_tfr_1991_4 <- coef(children_2010_4)["tfr_1991"]
+elasticidade_tfr_1991_4 <- coef_tfr_1991_4 * (mean_tfr_1991 / mean_children_2010)
+coef_tfr_1991_5 <- coef(children_2010_5)["tfr_1991"]
+elasticidade_tfr_1991_5 <- coef_tfr_1991_5 * (mean_tfr_1991 / mean_children_2010)
+
+```
+
+
+```{r graph all elast}
+models <- c("children_1991_5", "children_1991_4", "children_2000_5", "children_2000_4", "children_2010_5",   "children_2010_4")
+coef_values <- c(elasticidade_tfr_1970_5, elasticidade_tfr_1970_4, elasticidade_tfr_1980_5, elasticidade_tfr_1980_4, elasticidade_tfr_1991_5, elasticidade_tfr_1991_4)   # coeficientes de tfr_2000 para cada modelo
+se_values <- c(sd_tfr_1970_5, sd_tfr_1970_4, sd_tfr_1980_5, sd_tfr_1980_4, sd_tfr_1991_5, sd_tfr_1991_4)    # erros padrão correspondentes
+
+# Calcule automaticamente os intervalos de confiança de 95%
+ci_lower_values <- coef_values - 1.96 * se_values
+ci_upper_values <- coef_values + 1.96 * se_values
+
+# Crie o dataframe com os resultados
+regression_results <- data.frame(
+  model = models,
+  coef = coef_values,
+  ci_lower = ci_lower_values,
+  ci_upper = ci_upper_values
+)
+
+# Exibir o dataframe
+print(regression_results)
+
+# Plot de resultados tfr
+ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(color = "blue", size = 2) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2, color = "black") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  labs(x = "Model", y = "Coefficient of TFR",
+       title = "TFR_1980 Coefficients") +
+  theme_minimal()
+
+# Calcule a média dos coeficientes para a linha de referência
+mean_coef <- mean(regression_results$coef)
+
+# Gráfico com estilo ajustado e legendas aprimoradas
+children_all_main_elas <- ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(color = "darkcyan", size = 3) +  # Ajuste da cor e tamanho dos pontos
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2, color = "gray40") +
+  geom_hline(yintercept = mean_coef, linetype = "solid", color = "red", size = 0.8) +  # Linha média
+  #geom_hline(yintercept = mean_coef + 0.1, linetype = "dashed", color = "black") +  # Limite superior tracejado
+  #geom_hline(yintercept = mean_coef - 0.1, linetype = "dashed", color = "black") +  # Limite inferior tracejado
+
+  geom_hline(yintercept = 0, linetype = "dotted", color = "blue") +  # Linha de referência em zero
+  labs(
+    x = "Model Specifications",  # Rótulo do eixo x
+    y = "Increase in the Number of Children",  # Rótulo do eixo y
+    title = "Migrant Fertility - 1991, 2000 and 2010 (elasticities)",  # Título do gráfico
+    subtitle = "A one sd increase TFR (1970, 1980 and 1991) is associated with an increase in migrant fertility."  # Subtítulo do gráfico
+  ) +
+  scale_x_discrete(
+    labels = c("1991 (3)", "1991 (4)", "2000 (3)", "2000 (4)", "2010 (3)", "2010 (4)")  # Renomeia os valores no eixo x
+  ) +
+  geom_text(aes(label = round(coef, 3)), vjust = -1.5, color = "darkcyan", size = 4) +  # Adiciona os valores dos coeficientes
+  theme_minimal() +  # Ensure a light background theme
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),  # Set background to white
+    panel.background = element_rect(fill = "white", color = NA)  # Set panel background to white
+  )
+# Save the plot with a specified file path
+ggsave(filename = "D:/1_migration/4_results_migrants/graphs/fertility_all_main_elast.png", 
+       plot = children_all_main_elas, 
+       width = 10, height = 6, dpi = 300)
+
+
+```
+
+> # Robustness - children
+
+Tira UF com maior e menor TFR em 1970, 80 e 91.
+
+With female education levels.
+## 1991
+```{r children 1991 4 rob higher tfr}
+children_1991_4_rob_higher_tfr <- feols(children~ tfr_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp  |V1102, data = data_without_13_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4_rob_higher_tfr)
+etable(children_1991_4_rob_higher_tfr, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1991 rob_higher_tfr 4}
+
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_1991_4 <- weighted_sd(data_1991$tfr_1970, data_1991$V7301)
+
+coef_tfr_1991_4 <- coef(children_1991_4_rob_higher_tfr)["tfr_1970"]
+impacto_1sd_1991_rob_higher_tfr_4 <- coef_tfr_1991_4 * sd_tfr_1991_4
+impacto_1sd_1991_rob_higher_tfr_4
+```
+
+```{r children 1991 4 rob smallest tfr}
+children_1991_4_rob_smallest_tfr <- feols(children~ tfr_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp  |V1102, data = data_without_33_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4_rob_smallest_tfr)
+etable(children_1991_4_rob_smallest_tfr, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1991 rob_smallest_tfr 4}
+
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_1991_4 <- weighted_sd(data_1991$tfr_1970, data_1991$V7301)
+
+coef_tfr_1991_4 <- coef(children_1991_4_rob_smallest_tfr)["tfr_1970"]
+impacto_1sd_1991_rob_smallest_tfr_4 <- coef_tfr_1991_4 * sd_tfr_1991_4
+impacto_1sd_1991_rob_smallest_tfr_4
+```
+
+## 2000
+```{r children 2000 4 rob higher tfr}
+children_2000_4_rob_higher_tfr <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp |v0103, data = data_without_21_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4_rob_higher_tfr)
+etable(children_2000_4_rob_higher_tfr, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1980 rob_higher_tfr 4}
+
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_2000_4 <- weighted_sd(data_2000$tfr_1980, data_2000$v0103)
+
+coef_tfr_2000_4 <- coef(children_2000_4_rob_higher_tfr)["tfr_1980"]
+impacto_1sd_2000_rob_higher_tfr_4 <- coef_tfr_2000_4 * sd_tfr_2000_4
+impacto_1sd_2000_rob_higher_tfr_4
+```
+
+```{r children 2000 4 rob smallest tfr}
+children_2000_4_rob_smallest_tfr <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp |v0103, data = data_without_33_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4_rob_smallest_tfr)
+etable(children_2000_4_rob_smallest_tfr, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1980 rob_smallest_tfr 4}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+sd_tfr_2000_4 <- weighted_sd(data_2000$tfr_1980, data_2000$v0103)
+coef_tfr_2000_4 <- coef(children_2000_4_rob_smallest_tfr)["tfr_1980"]
+impacto_1sd_2000_rob_smallest_tfr_4 <- coef_tfr_2000_4 * sd_tfr_2000_4
+impacto_1sd_2000_rob_smallest_tfr_4
+```
+
+## 2010
+```{r children 2010 4 rob higher lfp}
+children_2010_4_rob_higher_tfr <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |munic, data = data_without_16_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4_rob_higher_tfr)
+etable(children_2010_4_rob_higher_tfr, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1991 rob_higher_tfr 4}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_2010_4 <- weighted_sd(data_2010$tfr_1991, data_2010$peso_pess)
+
+coef_tfr_2010_4 <- coef(children_2010_4_rob_higher_tfr)["tfr_1991"]
+impacto_1sd_2010_rob_higher_tfr_4 <- coef_tfr_2010_4 * sd_tfr_2010_4
+impacto_1sd_2010_rob_higher_tfr_4
+```
+```{r children 2010 4 rob smallest lfp}
+children_2010_4_rob_smallest_tfr <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |munic, data = data_without_33_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4_rob_smallest_tfr)
+etable(children_2010_4_rob_smallest_tfr, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1991 rob_smallest_tfr 4}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_2010_4 <- weighted_sd(data_2010$tfr_1991, data_2010$peso_pess)
+
+coef_tfr_2010_4 <- coef(children_2010_4_rob_smallest_tfr)["tfr_1991"]
+impacto_1sd_2010_rob_smallest_tfr_4 <- coef_tfr_2010_4 * sd_tfr_2010_4
+impacto_1sd_2010_rob_smallest_tfr_4
+```
+
+#### altogether
+
+```{r 1991 2000 2010 rob children state}
+etable(
+  children_1991_4_rob_higher_tfr,children_1991_4_rob_smallest_tfr,
+  children_2000_4_rob_higher_tfr,children_2000_4_rob_smallest_tfr,
+  children_2010_4_rob_higher_tfr,children_2010_4_rob_smallest_tfr,
+  tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+### Graph 1991, 2000 and 2010 - rob. states
+```{r graph all}
+models <- c(
+  "children_1991_4_rob_higher_tfr","children_1991_4_rob_smallest_tfr",
+  "children_2000_4_rob_higher_tfr","children_2000_4_rob_smallest_tfr",
+  "children_2010_4_rob_higher_tfr","children_2010_4_rob_smallest_tfr"
+  )
+coef_values <- c(
+  impacto_1sd_1991_rob_higher_tfr_4, impacto_1sd_1991_rob_smallest_tfr_4, impacto_1sd_2000_rob_higher_tfr_4, impacto_1sd_2000_rob_smallest_tfr_4,
+  impacto_1sd_2010_rob_higher_tfr_4, impacto_1sd_2010_rob_smallest_tfr_4)
+
+se_values <- c(sd_tfr_1970_4, sd_tfr_1970_4, sd_tfr_1980_4, sd_tfr_1980_4, sd_tfr_1991_4, sd_tfr_1991_4)
+
+# Calcule automaticamente os intervalos de confiança de 95%
+ci_lower_values <- coef_values - 1.96 * se_values
+ci_upper_values <- coef_values + 1.96 * se_values
+
+# Crie o dataframe com os resultados
+regression_results <- data.frame(
+  model = models,
+  coef = coef_values,
+  ci_lower = ci_lower_values,
+  ci_upper = ci_upper_values
+)
+
+# Exibir o dataframe
+#print(regression_results)
+
+# Plot de resultados tfr
+ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(color = "blue", size = 2) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2, color = "black") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  labs(x = "Model", y = "Coefficient of TFR",
+       title = "TFR_1980 Coefficients") +
+  theme_minimal()
+
+# Calcule a média dos coeficientes para a linha de referência
+mean_coef <- mean(regression_results$coef)
+
+# Define custom labels to apply only to positions 1, 3, and 5
+custom_labels <- c("Excluding High TFR State", "Excluding Low TFR State", 
+                   "Excluding High TFR State", "Excluding Low TFR State", 
+                   "Excluding High TFR State", "Excluding Low TFR State")
+
+# Gráfico com estilo ajustado e legenda personalizada
+children_all_rob_state_4 <- ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(aes(color = custom_labels), size = 3) +  # Usando cores para diferenciar os labels
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper, color = custom_labels), 
+                width = 0.2) +
+  geom_hline(yintercept = mean_coef, linetype = "solid", color = "red", size = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "blue") +
+  labs(
+    x = "Model Specifications",
+    y = "Increase in the Number of Children",
+    title = "Migrant Fertility Without Outliers - 1991, 2000, and 2010",
+    subtitle = "A one sd increase in TFR (1970, 1980, and 1991) is associated with an increase in migrant fertility."
+  ) +
+  scale_x_discrete(
+    labels = c("1991", "1991", 
+               "2000", "2000", 
+               "2010", "2010")
+  ) +
+  geom_text(aes(label = round(coef, 3)), vjust = -1.5, color = "darkcyan", size = 4) +
+  theme_minimal() +
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA),
+    legend.position = "right"
+  ) +
+  scale_color_manual(values = c("darkcyan", "gray40"), 
+                     name = "Exclusions", 
+                     labels = c("Excluding High TFR State", "Excluding Low TFR State"))  # Define as cores e os labels na legenda
+
+# Salvar o gráfico
+ggsave(filename = "D:/1_migration/4_results_migrants/graphs/fertility_all_rob_states_4.png", 
+       plot = children_all_rob_state_4, 
+       width = 10, height = 6, dpi = 300)
+```
+
+
+Without female education levels.
+## 1991
+```{r children 1991 5 rob higher lfp}
+children_1991_5_rob_higher_tfr <- feols(children~ tfr_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp  |V1102, data = data_without_13_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_5_rob_higher_tfr)
+etable(children_1991_5_rob_higher_tfr, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r tfr_1991 rob_higher_tfr 5}
+
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_1991_5 <- weighted_sd(data_1991$tfr_1970, data_1991$V7301)
+
+coef_tfr_1991_5 <- coef(children_1991_5_rob_higher_tfr)["tfr_1970"]
+impacto_1sd_1991_rob_higher_tfr_5 <- coef_tfr_1991_5 * sd_tfr_1991_5
+impacto_1sd_1991_rob_higher_tfr_5
+```
+
+```{r children 1991 5 rob smallest lfp}
+children_1991_5_rob_smallest_tfr <- feols(children~ tfr_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp  |V1102, data = data_without_33_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_5_rob_smallest_tfr)
+etable(children_1991_5_rob_smallest_tfr, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r tfr_1991 rob_smallest_tfr 5}
+
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_1991_5 <- weighted_sd(data_1991$tfr_1970, data_1991$V7301)
+
+coef_tfr_1991_5 <- coef(children_1991_5_rob_smallest_tfr)["tfr_1970"]
+impacto_1sd_1991_rob_smallest_tfr_5 <- coef_tfr_1991_5 * sd_tfr_1991_5
+impacto_1sd_1991_rob_smallest_tfr_5
+```
+
+## 2000
+```{r children 2000 5 rob higher lfp}
+children_2000_5_rob_higher_tfr <- feols(children ~ tfr_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp |v0103, data = data_without_21_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_5_rob_higher_tfr)
+etable(children_2000_5_rob_higher_tfr, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1980 rob_higher_tfr 5}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_2000_5 <- weighted_sd(data_2000$tfr_1980, data_2000$v0103)
+
+coef_tfr_2000_5 <- coef(children_2000_5_rob_higher_tfr)["tfr_1980"]
+impacto_1sd_2000_rob_higher_tfr_5 <- coef_tfr_2000_5 * sd_tfr_2000_5
+impacto_1sd_2000_rob_higher_tfr_5
+```
+
+```{r children 2000 5 rob smallest lfp}
+children_2000_5_rob_smallest_tfr <- feols(children ~ tfr_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp |v0103, data = data_without_33_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_5_rob_smallest_tfr)
+etable(children_2000_5_rob_smallest_tfr, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1980 rob_smallest_tfr 5}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_2000_5 <- weighted_sd(data_2000$tfr_1980, data_2000$v0103)
+
+coef_tfr_2000_5 <- coef(children_2000_5_rob_smallest_tfr)["tfr_1980"]
+impacto_1sd_2000_rob_smallest_tfr_5 <- coef_tfr_2000_5 * sd_tfr_2000_5
+impacto_1sd_2000_rob_smallest_tfr_5
+```
+
+## 2010
+```{r children 2010 4 rob higher lfp}
+children_2010_5_rob_higher_tfr <- feols(children ~ tfr_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |munic, data = data_without_16_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_5_rob_higher_tfr)
+etable(children_2010_5_rob_higher_tfr, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1991 rob_higher_tfr 4}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_2010_5 <- weighted_sd(data_2010$tfr_1991, data_2010$peso_pess)
+
+coef_tfr_2010_5 <- coef(children_2010_5_rob_higher_tfr)["tfr_1991"]
+impacto_1sd_2010_rob_higher_tfr_5 <- coef_tfr_2010_5 * sd_tfr_2010_5
+impacto_1sd_2010_rob_higher_tfr_5
+```
+
+```{r children 2010 4 rob smallest lfp}
+children_2010_5_rob_smallest_tfr <- feols(children ~ tfr_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |munic, data = data_without_33_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_5_rob_smallest_tfr)
+etable(children_2010_5_rob_smallest_tfr, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r sd tfr_1991 rob_smallest_tfr 4}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+sd_tfr_2010_5 <- weighted_sd(data_2010$tfr_1991, data_2010$peso_pess)
+
+coef_tfr_2010_5 <- coef(children_2010_5_rob_smallest_tfr)["tfr_1991"]
+impacto_1sd_2010_rob_smallest_tfr_5 <- coef_tfr_2010_5 * sd_tfr_2010_5
+impacto_1sd_2010_rob_smallest_tfr_5
+```
+
+#### altogether
+
+```{r 1991 2000 2010 rob}
+etable(
+  children_1991_5_rob_higher_tfr,children_1991_5_rob_smallest_tfr,
+  children_2000_5_rob_higher_tfr,children_2000_5_rob_smallest_tfr,
+  children_2010_5_rob_higher_tfr,children_2010_5_rob_smallest_tfr,
+  tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+### Graph 1991, 2000 and 2010 - rob. states (no female education)
+```{r graph all rob states 5}
+models <- c(
+  "children_1991_5_rob_higher_tfr","children_1991_5_rob_smallest_tfr",
+  "children_2000_5_rob_higher_tfr","children_2000_5_rob_smallest_tfr",
+  "children_2010_5_rob_higher_tfr","children_2010_5_rob_smallest_tfr"
+  )
+coef_values <- c(
+  impacto_1sd_1991_rob_higher_tfr_5, impacto_1sd_1991_rob_smallest_tfr_5, impacto_1sd_2000_rob_higher_tfr_5, impacto_1sd_2000_rob_smallest_tfr_5,
+  impacto_1sd_2010_rob_higher_tfr_5, impacto_1sd_2010_rob_smallest_tfr_5)
+
+se_values <- c(sd_tfr_1970_5, sd_tfr_1970_5, sd_tfr_1980_5, sd_tfr_1980_5, sd_tfr_1991_5, sd_tfr_1991_5)
+
+# Calcule automaticamente os intervalos de confiança de 95%
+ci_lower_values <- coef_values - 1.96 * se_values
+ci_upper_values <- coef_values + 1.96 * se_values
+
+# Crie o dataframe com os resultados
+regression_results <- data.frame(
+  model = models,
+  coef = coef_values,
+  ci_lower = ci_lower_values,
+  ci_upper = ci_upper_values
+)
+
+# Exibir o dataframe
+#print(regression_results)
+
+# Plot de resultados tfr
+ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(color = "blue", size = 2) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2, color = "black") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  labs(x = "Model", y = "Coefficient of TFR",
+       title = "TFR_1980 Coefficients") +
+  theme_minimal()
+
+# Calcule a média dos coeficientes para a linha de referência
+mean_coef <- mean(regression_results$coef)
+
+# Define custom labels to apply only to positions 1, 3, and 5
+custom_labels <- c("Excluding High TFR State", "Excluding Low TFR State", 
+                   "Excluding High TFR State", "Excluding Low TFR State", 
+                   "Excluding High TFR State", "Excluding Low TFR State")
+
+# Gráfico com estilo ajustado e legenda personalizada
+children_all_rob_state_5 <- ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(aes(color = custom_labels), size = 3) +  # Usando cores para diferenciar os labels
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper, color = custom_labels), 
+                width = 0.2) +
+  geom_hline(yintercept = mean_coef, linetype = "solid", color = "red", size = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "blue") +
+  labs(
+    x = "Model Specifications",
+    y = "Increase in the Number of Children",
+    title = "Migrant Fertility Without Outliers - 1991, 2000, and 2010 (Excluding Female Education)",
+    subtitle = "A one sd increase in TFR (1970, 1980, and 1991) is associated with an increase in migrant fertility."
+  ) +
+  scale_x_discrete(
+    labels = c("1991", "1991", 
+               "2000", "2000", 
+               "2010", "2010")
+  ) +
+  geom_text(aes(label = round(coef, 3)), vjust = -1.5, color = "darkcyan", size = 4) +
+  theme_minimal() +
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA),
+    legend.position = "right"
+  ) +
+  scale_color_manual(values = c("darkcyan", "gray40"), 
+                     name = "Exclusions", 
+                     labels = c("Excluding High TFR State", "Excluding Low TFR State"))  # Define as cores e os labels na legenda
+
+# Salvar o gráfico
+ggsave(filename = "D:/1_migration/4_results_migrants/graphs/fertility_all_rob_states_5.png", 
+       plot = children_all_rob_state_5, 
+       width = 10, height = 6, dpi = 300)
+```
+
+> # Race - children
+
+With female education levels
+## 1991
+```{r children 1991 4 white}
+children_1991_4_white <- feols(children~ tfr_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp  |V1102, data = data_white_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4_white)
+etable(children_1991_4_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 1991 4 black/brown}
+children_1991_4_black <- feols(children~ tfr_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp  |V1102, data = data_black_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4_black)
+etable(children_1991_4_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+```{r children 2000 4 white}
+children_2000_4_white <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp |v0103, data = data_white_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4_white)
+etable(children_2000_4_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 2000 4 black/brown}
+children_2000_4_black <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp |v0103, data = data_black_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4_black)
+etable(children_2000_4_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+```{r children 2010 4 white}
+children_2010_4_white <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp|munic, data = data_white_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4_white)
+etable(children_2010_4_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 2010 4 black/brown}
+children_2010_4_black <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp|munic, data = data_black_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4_black)
+etable(children_2010_4_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r 1991 2000 2010 race children}
+etable(children_1991_4_white, children_1991_4_black, children_2000_4_white, children_2000_4_black, children_2010_4_white, children_2010_4_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+
+```{r tfr race 4}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+# 2010
+sd_tfr_2010_white_4 <- weighted_sd(data_white_2010$tfr_1991, data_white_2010$peso_pess)
+
+coef_tfr_2010_white_4 <- coef(children_2010_4_white)["tfr_1991"]
+impacto_1sd_2010_white_4 <- coef_tfr_2010_white_4 * sd_tfr_2010_white_4
+
+sd_tfr_2010_black_4 <- weighted_sd(data_black_2010$tfr_1991, data_black_2010$peso_pess)
+
+coef_tfr_2010_black_4 <- coef(children_2010_4_black)["tfr_1991"]
+impacto_1sd_2010_black_4 <- coef_tfr_2010_white_4 * sd_tfr_2010_black_4
+
+# 2000
+sd_tfr_2000_white_4 <- weighted_sd(data_white_2000$tfr_1980, data_white_2000$P001)
+
+coef_tfr_2000_white_4 <- coef(children_2000_4_white)["tfr_1980"]
+impacto_1sd_2000_white_4 <- coef_tfr_2000_white_4 * sd_tfr_2000_white_4
+
+sd_tfr_2000_black_4 <- weighted_sd(data_black_2000$tfr_1980, data_black_2000$P001)
+
+coef_tfr_2000_black_4 <- coef(children_2000_4_black)["tfr_1980"]
+impacto_1sd_2000_black_4 <- coef_tfr_2000_white_4 * sd_tfr_2000_black_4
+
+# 1991
+sd_tfr_1991_white_4 <- weighted_sd(data_white_1991$tfr_1970, data_white_1991$V7301)
+
+coef_tfr_1991_white_4 <- coef(children_1991_4_white)["tfr_1970"]
+impacto_1sd_1991_white_4 <- coef_tfr_1991_white_4 * sd_tfr_1991_white_4
+
+sd_tfr_1991_black_4 <- weighted_sd(data_black_1991$tfr_1970, data_black_1991$V7301)
+
+coef_tfr_1991_black_4 <- coef(children_1991_4_black)["tfr_1970"]
+impacto_1sd_1991_black_4 <- coef_tfr_1991_white_4 * sd_tfr_1991_black_4
+```
+
+### Graph 1991, 2000 and 2010 - race (with female education)
+```{r graph all race 4}
+models <- c(
+"children_1991_4_white", "children_1991_4_black", "children_2000_4_white", "children_2000_4_black", "children_2010_4_white", "children_2010_4_black"
+  )
+coef_values <- c(
+  impacto_1sd_1991_white_4, impacto_1sd_1991_black_4, impacto_1sd_2000_white_4, impacto_1sd_2000_black_4,
+  impacto_1sd_2010_white_4, impacto_1sd_2010_black_4)
+
+se_values <- c(sd_tfr_1991_white_4, sd_tfr_1991_black_4, sd_tfr_2000_white_4, sd_tfr_2000_black_4,sd_tfr_2010_white_4, sd_tfr_2010_black_4)
+
+# Calcule automaticamente os intervalos de confiança de 95%
+ci_lower_values <- coef_values - 1.96 * se_values
+ci_upper_values <- coef_values + 1.96 * se_values
+
+# Crie o dataframe com os resultados
+regression_results <- data.frame(
+  model = models,
+  coef = coef_values,
+  ci_lower = ci_lower_values,
+  ci_upper = ci_upper_values
+)
+
+# Calcule a média dos coeficientes para a linha de referência
+mean_coef <- mean(regression_results$coef)
+
+# Define custom labels to apply only to positions 1, 3, and 5
+custom_labels <- c("White", "Black/Brown", 
+                   "White", "Black/Brown", 
+                   "White", "Black/Brown")
+
+# Gráfico com estilo ajustado e legenda personalizada
+children_all_race_4 <- ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(aes(color = custom_labels), size = 3) +  # Usando cores para diferenciar os labels
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper, color = custom_labels), 
+                width = 0.2) +
+  geom_hline(yintercept = mean_coef, linetype = "solid", color = "red", size = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "blue") +
+  labs(
+    x = "Model Specifications",
+    y = "Increase in the Number of Children",
+    title = "Race: Migrant Fertility - 1991, 2000, and 2010",
+    subtitle = "A one sd increase in TFR (1970, 1980, and 1991) is associated with an increase in migrant fertility."
+  ) +
+  scale_x_discrete(
+    labels = c("1991", "1991", 
+               "2000", "2000", 
+               "2010", "2010")
+  ) +
+  geom_text(aes(label = round(coef, 3)), vjust = -1.5, color = "darkcyan", size = 4) +
+  theme_minimal() +
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA),
+    legend.position = "right"
+  ) +
+  scale_color_manual(values = c("darkcyan", "gray40"), 
+                     name = "Race", 
+                     labels = c("White", "Black/Brown"))  # Define as cores e os labels na legenda
+
+# Salvar o gráfico
+ggsave(filename = "D:/1_migration/4_results_migrants/graphs/fertility_all_race_4.png", 
+       plot = children_all_race_4, 
+       width = 10, height = 6, dpi = 300)
+```
+
+Without female education levels
+## 1991
+```{r children 1991 4 white}
+children_1991_5_white <- feols(children~ tfr_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp  |V1102, data = data_white_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_5_white)
+etable(children_1991_5_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 1991 4 black/brown}
+children_1991_5_black <- feols(children~ tfr_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp  |V1102, data = data_black_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_5_black)
+etable(children_1991_5_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+```{r children 2000 4 white}
+children_2000_5_white <- feols(children ~ tfr_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp |v0103, data = data_white_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_5_white)
+etable(children_2000_5_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 2000 4 black/brown}
+children_2000_5_black <- feols(children ~ tfr_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp |v0103, data = data_black_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_5_black)
+etable(children_2000_5_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+```{r children 2010 4 white}
+children_2010_5_white <- feols(children ~ tfr_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp|munic, data = data_white_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_5_white)
+etable(children_2010_5_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 2010 4 black/brown}
+children_2010_5_black <- feols(children ~ tfr_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp|munic, data = data_black_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_5_black)
+etable(children_2010_5_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r 1991 2000 2010 race 5} 
+etable(children_1991_5_white, children_1991_5_black, children_2000_5_white, children_2000_5_black, children_2010_5_white, children_2010_5_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r tfr race 5}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+# 2010
+sd_tfr_2010_white_5 <- weighted_sd(data_white_2010$tfr_1991, data_white_2010$peso_pess)
+
+coef_tfr_2010_white_5 <- coef(children_2010_5_white)["tfr_1991"]
+impacto_1sd_2010_white_5 <- coef_tfr_2010_white_5 * sd_tfr_2010_white_5
+
+sd_tfr_2010_black_5 <- weighted_sd(data_black_2010$tfr_1991, data_black_2010$peso_pess)
+
+coef_tfr_2010_black_5 <- coef(children_2010_5_black)["tfr_1991"]
+impacto_1sd_2010_black_5 <- coef_tfr_2010_white_5 * sd_tfr_2010_black_5
+
+# 2000
+sd_tfr_2000_white_5 <- weighted_sd(data_white_2000$tfr_1980, data_white_2000$P001)
+
+coef_tfr_2000_white_5 <- coef(children_2000_5_white)["tfr_1980"]
+impacto_1sd_2000_white_5 <- coef_tfr_2000_white_5 * sd_tfr_2000_white_5
+
+sd_tfr_2000_black_5 <- weighted_sd(data_black_2000$tfr_1980, data_black_2000$P001)
+
+coef_tfr_2000_black_5 <- coef(children_2000_5_black)["tfr_1980"]
+impacto_1sd_2000_black_5 <- coef_tfr_2000_white_5 * sd_tfr_2000_black_5
+
+# 1991
+sd_tfr_1991_white_5 <- weighted_sd(data_white_1991$tfr_1970, data_white_1991$V7301)
+
+coef_tfr_1991_white_5 <- coef(children_1991_5_white)["tfr_1970"]
+impacto_1sd_1991_white_5 <- coef_tfr_1991_white_5 * sd_tfr_1991_white_5
+
+sd_tfr_1991_black_5 <- weighted_sd(data_black_1991$tfr_1970, data_black_1991$V7301)
+
+coef_tfr_1991_black_5 <- coef(children_1991_5_black)["tfr_1970"]
+impacto_1sd_1991_black_5 <- coef_tfr_1991_white_5 * sd_tfr_1991_black_5
+```
+
+
+### Graph 1991, 2000 and 2010 - race (without female education)
+```{r graph all race 5}
+models <- c(
+"children_1991_5_white", "children_1991_5_black", "children_2000_5_white", "children_2000_5_black", "children_2010_5_white", "children_2010_5_black"
+  )
+coef_values <- c(
+  impacto_1sd_1991_white_5, impacto_1sd_1991_black_5, impacto_1sd_2000_white_5, impacto_1sd_2000_black_5,
+  impacto_1sd_2010_white_5, impacto_1sd_2010_black_5)
+
+se_values <- c(sd_tfr_1991_white_5, sd_tfr_1991_black_5, sd_tfr_2000_white_5, sd_tfr_2000_black_5,sd_tfr_2010_white_5, sd_tfr_2010_black_5)
+
+# Calcule automaticamente os intervalos de confiança de 95%
+ci_lower_values <- coef_values - 1.96 * se_values
+ci_upper_values <- coef_values + 1.96 * se_values
+
+# Crie o dataframe com os resultados
+regression_results <- data.frame(
+  model = models,
+  coef = coef_values,
+  ci_lower = ci_lower_values,
+  ci_upper = ci_upper_values
+)
+
+# Calcule a média dos coeficientes para a linha de referência
+mean_coef <- mean(regression_results$coef)
+
+# Define custom labels to apply only to positions 1, 3, and 5
+custom_labels <- c("White", "Black/Brown", 
+                   "White", "Black/Brown", 
+                   "White", "Black/Brown")
+
+# Gráfico com estilo ajustado e legenda personalizada
+children_all_race_5 <- ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(aes(color = custom_labels), size = 3) +  # Usando cores para diferenciar os labels
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper, color = custom_labels), 
+                width = 0.2) +
+  geom_hline(yintercept = mean_coef, linetype = "solid", color = "red", size = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "blue") +
+  labs(
+    x = "Model Specifications",
+    y = "Increase in the Number of Children",
+    title = "Race: Migrant Fertility - 1991, 2000, and 2010 (Excluding Female Education)",
+    subtitle = "A one sd increase in TFR (1970, 1980, and 1991) is associated with an increase in migrant fertility."
+  ) +
+  scale_x_discrete(
+    labels = c("1991", "1991", 
+               "2000", "2000", 
+               "2010", "2010")
+  ) +
+  geom_text(aes(label = round(coef, 3)), vjust = -1.5, color = "darkcyan", size = 4) +
+  theme_minimal() +
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA),
+    legend.position = "right"
+  ) +
+  scale_color_manual(values = c("darkcyan", "gray40"), 
+                     name = "Race", 
+                     labels = c("White", "Black/Brown"))  # Define as cores e os labels na legenda
+
+# Salvar o gráfico
+ggsave(filename = "D:/1_migration/4_results_migrants/graphs/fertility_all_race_5.png", 
+       plot = children_all_race_5, 
+       width = 10, height = 6, dpi = 300)
+```
+
+
+#### altogether 4+5
+
+```{r 1991 2000 2010 race 4/5} 
+etable(children_1991_4_white, children_1991_4_black, children_2000_4_white, children_2000_4_black, children_2010_4_white, children_2010_4_black, children_1991_5_white, children_1991_5_black, children_2000_5_white, children_2000_5_black, children_2010_5_white, children_2010_5_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+### Graph 1991, 2000 and 2010 - race (with + without female education)
+```{r graph all race 4/5}
+models <- c("children_1991_4_white", "children_1991_5_white",
+  "children_1991_4_black", "children_1991_5_black",
+  "children_2000_4_white", "children_2000_5_white",
+  "children_2000_4_black", "children_2000_5_black",
+  "children_2010_4_white", "children_2010_5_white",
+  "children_2010_4_black","children_2010_5_black"
+  )
+
+coef_values <- c(
+  impacto_1sd_1991_white_4, impacto_1sd_1991_white_5, impacto_1sd_1991_black_4, impacto_1sd_1991_black_5, impacto_1sd_2000_white_4, impacto_1sd_2000_white_5, impacto_1sd_2000_black_4,impacto_1sd_2000_black_5,
+  impacto_1sd_2010_white_4, impacto_1sd_2010_white_5, impacto_1sd_2010_black_4, impacto_1sd_2010_black_5)
+
+se_values <- c(sd_tfr_1991_white_4, sd_tfr_1991_white_5, sd_tfr_1991_black_4, sd_tfr_1991_black_5, sd_tfr_2000_white_4,sd_tfr_2000_white_5, sd_tfr_2000_black_4,sd_tfr_2000_black_5, sd_tfr_2010_white_4, sd_tfr_2010_white_5, sd_tfr_2010_black_4, sd_tfr_2010_black_5)
+
+
+# Calcule automaticamente os intervalos de confiança de 95%
+ci_lower_values <- coef_values - 1.96 * se_values
+ci_upper_values <- coef_values + 1.96 * se_values
+
+# Crie o dataframe com os resultados
+regression_results <- data.frame(
+  model = models,
+  coef = coef_values,
+  ci_lower = ci_lower_values,
+  ci_upper = ci_upper_values
+)
+
+# Calcule a média dos coeficientes para a linha de referência
+mean_coef <- mean(regression_results$coef)
+
+# Define custom labels with the correct length (now 18 items for 18 models)
+custom_labels <- c("White", "Black/Brown", "White", "Black/Brown", 
+                   "White", "Black/Brown", "White", "Black/Brown",
+                   "White", "Black/Brown", "White", "Black/Brown"
+  )
+
+# Add custom_labels to regression_results for consistent mapping
+regression_results$custom_labels <- custom_labels
+
+# Adjusted plot code with additional colors
+children_all_race_4_5 <- ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(aes(color = custom_labels), size = 3) +  # Use colors to differentiate the labels
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper, color = custom_labels), 
+                width = 0.2) +
+  geom_hline(yintercept = mean_coef, linetype = "solid", color = "red", size = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "blue") +
+  labs(
+    x = "Model Specifications",
+    y = "Increase in the Number of Children",
+    title = "Race: Migrant Fertility - 1991, 2000, and 2010",
+    subtitle = "A one sd increase in TFR (1970, 1980, and 1991) is associated with an increase in migrant fertility."
+  ) +
+  scale_x_discrete(
+    labels = c(
+      "1991", "1991", "1991", "1991",
+      "2000", "2000", "2000", "2000",
+      "2010", "2010", "2010", "2010"
+      )
+  ) +
+  geom_text(aes(label = round(coef, 3)), vjust = -1.5, color = "darkcyan", size = 4) +
+  theme_minimal() +
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA),
+    legend.position = "right"
+  ) +
+  # Define colors for each label
+  scale_color_manual(
+    values = c("darkcyan", "gray40", "purple", "orange"),  # Colors for each group
+    name = "Race and Education",
+    labels = c("White - with education", "Black/Brown - with education", 
+               "White - no education", "Black/Brown - no education")
+  )
+
+# Save the plot
+ggsave(filename = "D:/1_migration/4_results_migrants/graphs/fertility_all_race_4_5.png", 
+       plot = children_all_race_4_5, 
+       width = 10, height = 6, dpi = 300)
+
+```
+
+
+
+
+
+> # Robustness - children race
+
+Tira UF com maior e menor TFR em 1970, 80 e 91.
+
+```{r robustez}
+###########
+# ROBUSTEZ
+###########
+
+## white
+## 1991
+data_white_without_13_1991 <- data_white_1991 |> # Amazonas (maior)
+  filter(uf_nascim != 13)
+data_white_without_33_1991 <- data_white_1991 |> # rj (menor)
+  filter(uf_nascim != 33)
+
+## 2000
+data_white_without_21_2000 <- data_white_2000 |>  # Maranhão
+  filter(uf_nascim != 21)
+data_white_without_33_2000 <- data_white_2000 |>  # rj
+  filter(uf_nascim != 33)
+
+## 2010
+data_white_without_16_2010 <- data_white_2010 |>  # Amapá
+  filter(uf_nascim != 16)
+data_white_without_33_2010 <- data_white_2010 |>  # rj
+  filter(uf_nascim != 33)
+
+## black/brown
+## 1991
+data_black_without_13_1991 <- data_black_1991 |> # Amazonas (maior)
+  filter(uf_nascim != 13)
+data_black_without_33_1991 <- data_black_1991 |> # rj (menor)
+  filter(uf_nascim != 33)
+
+## 2000
+data_black_without_21_2000 <- data_black_2000 |>  # Maranhão
+  filter(uf_nascim != 21)
+data_black_without_33_2000 <- data_black_2000 |>  # rj
+  filter(uf_nascim != 33)
+
+## 2010
+data_black_without_16_2010 <- data_black_2010 |>  # amapá
+  filter(uf_nascim != 16)
+data_black_without_33_2010 <- data_black_2010 |>  # rj
+  filter(uf_nascim != 33)
+```
+
+
+With female education levels.
+## 1991
+### white
+```{r children 1991 4 rob higher tfr white}
+children_1991_4_rob_tfr_white_higher <- feols(children~ tfr_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |V1102, data = data_white_without_13_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4_rob_tfr_white_higher)
+etable(children_1991_4_rob_tfr_white_higher, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 1991 4 rob smallest tfr white}
+children_1991_4_rob_tfr_white_smaller <- feols(children~ tfr_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |V1102, data = data_white_without_33_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4_rob_tfr_white_smaller)
+etable(children_1991_4_rob_tfr_white_smaller, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+### black
+```{r children 1991 4 rob higher tfr black}
+children_1991_4_rob_tfr_black_higher <- feols(children~ tfr_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |V1102, data = data_black_without_13_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4_rob_tfr_black_higher)
+etable(children_1991_4_rob_tfr_black_higher, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 1991 4 rob smallest tfr black}
+children_1991_4_rob_tfr_black_smaller <- feols(children~ tfr_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |V1102, data = data_black_without_33_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4_rob_tfr_black_smaller)
+etable(children_1991_4_rob_tfr_black_smaller, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+### white
+```{r children 2000 4 rob higher tfr white}
+children_2000_4_rob_tfr_white_higher <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp |v0103, data = data_white_without_21_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4_rob_tfr_white_higher)
+etable(children_2000_4_rob_tfr_white_higher, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 2000 4 rob smallest tfr white}
+children_2000_4_rob_tfr_white_smaller <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp |v0103, data = data_white_without_33_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4_rob_tfr_white_smaller)
+etable(children_2000_4_rob_tfr_white_smaller, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+### black
+```{r children 2000 4 rob higher tfr black}
+children_2000_4_rob_tfr_black_higher <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp |v0103, data = data_black_without_21_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4_rob_tfr_black_higher)
+etable(children_2000_4_rob_tfr_black_higher, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 2000 4 rob smallest tfr black}
+children_2000_4_rob_tfr_black_smaller <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp |v0103, data = data_black_without_33_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4_rob_tfr_black_smaller)
+etable(children_2000_4_rob_tfr_black_smaller, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+### white
+```{r children 2010 4 rob higher tfr white higher}
+children_2010_4_rob_tfr_white_higher <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |munic, data = data_white_without_16_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4_rob_tfr_white_higher)
+etable(children_2010_4_rob_tfr_white_higher, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 2010 4 rob smallest tfr white smaller}
+children_2010_4_rob_tfr_white_smaller <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |munic, data = data_white_without_33_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4_rob_tfr_white_smaller)
+etable(children_2010_4_rob_tfr_white_smaller, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+### black
+```{r children 2010 4 rob higher tfr black higher}
+children_2010_4_rob_tfr_black_higher <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |munic, data = data_black_without_16_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4_rob_tfr_black_higher)
+etable(children_2010_4_rob_tfr_black_higher, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 2010 4 rob smallest tfr black smaller}
+children_2010_4_rob_tfr_black_smaller <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |munic, data = data_black_without_33_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4_rob_tfr_black_smaller)
+etable(children_2010_4_rob_tfr_black_smaller, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+
+#### altogether
+
+```{r 1991 2000 2010 rob children race higher tfr}
+etable(
+  children_1991_4_rob_tfr_white_higher, 
+  children_2000_4_rob_tfr_white_higher,
+  children_2010_4_rob_tfr_white_higher,
+  
+  children_1991_4_rob_tfr_black_higher, 
+  children_2000_4_rob_tfr_black_higher,
+  children_2010_4_rob_tfr_black_higher
+  , tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r tfr rob race higher tfr per state 4}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+# 2010
+## white
+sd_tfr_2010_white_higher_tfr_4 <- weighted_sd(data_white_without_16_2010$tfr_1991, data_white_without_16_2010$peso_pess)
+
+coef_tfr_2010_white_higher_tfr_4 <- coef(children_2010_4_rob_tfr_white_higher)["tfr_1991"]
+impacto_1sd_2010_white_higher_tfr_4 <- coef_tfr_2010_white_higher_tfr_4 * sd_tfr_2010_white_higher_tfr_4
+
+## black
+sd_tfr_2010_black_higher_tfr_4 <- weighted_sd(data_black_without_16_2010$tfr_1991, data_black_without_16_2010$peso_pess)
+
+coef_tfr_2010_black_higher_tfr_4 <- coef(children_2010_4_rob_tfr_black_higher)["tfr_1991"]
+impacto_1sd_2010_black_higher_tfr_4 <- coef_tfr_2010_white_higher_tfr_4 * sd_tfr_2010_black_higher_tfr_4
+
+# 2000
+## white
+sd_tfr_2000_white_higher_tfr_4 <- weighted_sd(data_white_without_21_2000$tfr_1980, data_white_without_21_2000$P001)
+
+coef_tfr_2000_white_higher_tfr_4 <- coef(children_2000_4_rob_tfr_white_higher)["tfr_1980"]
+impacto_1sd_2000_white_higher_tfr_4 <- coef_tfr_2000_white_higher_tfr_4 * sd_tfr_2000_white_higher_tfr_4
+
+## black
+sd_tfr_2000_black_higher_tfr_4 <- weighted_sd(data_black_without_21_2000$tfr_1980, data_black_without_21_2000$P001)
+
+coef_tfr_2000_black_higher_tfr_4 <- coef(children_2000_4_rob_tfr_black_higher)["tfr_1980"]
+impacto_1sd_2000_black_higher_tfr_4 <- coef_tfr_2000_white_higher_tfr_4 * sd_tfr_2000_black_higher_tfr_4
+
+# 1991
+## white
+sd_tfr_1991_white_higher_tfr_4 <- weighted_sd(data_white_without_13_1991$tfr_1970, data_white_without_13_1991$V7301)
+
+coef_tfr_1991_white_higher_tfr_4 <- coef(children_1991_4_rob_tfr_white_higher)["tfr_1970"]
+impacto_1sd_1991_white_higher_tfr_4 <- coef_tfr_1991_white_higher_tfr_4 * sd_tfr_1991_white_higher_tfr_4
+
+## black
+sd_tfr_1991_black_higher_tfr_4 <- weighted_sd(data_black_without_13_1991$tfr_1970, data_black_without_13_1991$V7301)
+
+coef_tfr_1991_black_higher_tfr_4 <- coef(children_1991_4_rob_tfr_black_higher)["tfr_1970"]
+impacto_1sd_1991_black_higher_tfr_4 <- coef_tfr_1991_white_higher_tfr_4 * sd_tfr_1991_black_higher_tfr_4
+```
+
+### Graph 1991, 2000 and 2010 - rob race (with female education)
+```{r graph all rob race higher 4}
+models <- c(
+"children_1991_4_rob_tfr_white_higher", "children_1991_4_rob_tfr_black_higher", "children_2000_4_rob_tfr_white_higher", "children_2000_4_rob_tfr_black_higher", "children_2010_4_rob_tfr_white_higher", "children_2010_4_rob_tfr_black_higher"
+  )
+coef_values <- c(
+  impacto_1sd_1991_white_higher_tfr_4, impacto_1sd_1991_black_higher_tfr_4, impacto_1sd_2000_white_higher_tfr_4, impacto_1sd_2000_black_higher_tfr_4,
+  impacto_1sd_2010_white_higher_tfr_4, impacto_1sd_2010_black_higher_tfr_4)
+
+se_values <- c(sd_tfr_1991_white_higher_tfr_4, sd_tfr_1991_black_higher_tfr_4, sd_tfr_2000_white_higher_tfr_4, sd_tfr_2000_black_higher_tfr_4,sd_tfr_2010_white_higher_tfr_4, sd_tfr_2010_black_higher_tfr_4)
+
+# Calcule automaticamente os intervalos de confiança de 95%
+ci_lower_values <- coef_values - 1.96 * se_values
+ci_upper_values <- coef_values + 1.96 * se_values
+
+# Crie o dataframe com os resultados
+regression_results <- data.frame(
+  model = models,
+  coef = coef_values,
+  ci_lower = ci_lower_values,
+  ci_upper = ci_upper_values
+)
+
+# Calcule a média dos coeficientes para a linha de referência
+mean_coef <- mean(regression_results$coef)
+
+# Define custom labels to apply only to positions 1, 3, and 5
+custom_labels <- c("White", "Black/Brown", 
+                   "White", "Black/Brown", 
+                   "White", "Black/Brown")
+
+# Gráfico com estilo ajustado e legenda personalizada
+children_all_rob_higher_race <- ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(aes(color = custom_labels), size = 3) +  # Usando cores para diferenciar os labels
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper, color = custom_labels), 
+                width = 0.2) +
+  geom_hline(yintercept = mean_coef, linetype = "solid", color = "red", size = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "blue") +
+  labs(
+    x = "Model Specifications",
+    y = "Increase in the Number of Children",
+    title = "Migrant Fertility Without Outliers - 1991, 2000, and 2010",
+    subtitle = "A one sd increase in TFR (1970, 1980, and 1991) is associated with an increase in migrant fertility."
+  ) +
+  scale_x_discrete(
+    labels = c("1991", "1991", 
+               "2000", "2000", 
+               "2010", "2010")
+  ) +
+  geom_text(aes(label = round(coef, 3)), vjust = -1.5, color = "darkcyan", size = 4) +
+  theme_minimal() +
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA),
+    legend.position = "right"
+  ) +
+  scale_color_manual(values = c("darkcyan", "gray40"), 
+                     name = "Race", 
+                     labels = c("White", "Black/Brown"))  # Define as cores e os labels na legenda
+
+# Salvar o gráfico
+ggsave(filename = "D:/1_migration/4_results_migrants/graphs/fertility_all_race_4_rob_higher_state.png", 
+       plot = children_all_rob_higher_race, 
+       width = 10, height = 6, dpi = 300)
+```
+
+```{r 1991 2000 2010 rob children race smallest tfr}
+etable(
+  children_1991_4_rob_tfr_white_smaller, 
+  children_2000_4_rob_tfr_white_smaller,
+  children_2010_4_rob_tfr_white_smaller,
+  
+  children_1991_4_rob_tfr_black_smaller, 
+  children_2000_4_rob_tfr_black_smaller,
+  children_2010_4_rob_tfr_black_smaller
+
+  , tex = TRUE, dict = var_labels, digits = "r4")
+
+```
+
+```{r tfr rob race smallest tfr per state 4}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+# 2010
+## white
+sd_tfr_2010_white_smaller_tfr_4 <- weighted_sd(data_white_without_33_2010$tfr_1991, data_white_without_33_2010$peso_pess)
+
+coef_tfr_2010_white_smaller_tfr_4 <- coef(children_2010_4_rob_tfr_white_smaller)["tfr_1991"]
+impacto_1sd_2010_white_smaller_tfr_4 <- coef_tfr_2010_white_smaller_tfr_4 * sd_tfr_2010_white_smaller_tfr_4
+
+## black
+sd_tfr_2010_black_smaller_tfr_4 <- weighted_sd(data_black_without_33_2010$tfr_1991, data_black_without_33_2010$peso_pess)
+
+coef_tfr_2010_black_smaller_tfr_4 <- coef(children_2010_4_rob_tfr_black_smaller)["tfr_1991"]
+impacto_1sd_2010_black_smaller_tfr_4 <- coef_tfr_2010_white_smaller_tfr_4 * sd_tfr_2010_black_smaller_tfr_4
+
+# 2000
+## white
+sd_tfr_2000_white_smaller_tfr_4 <- weighted_sd(data_white_without_33_2000$tfr_1980, data_white_without_33_2000$P001)
+
+coef_tfr_2000_white_smaller_tfr_4 <- coef(children_2000_4_rob_tfr_white_smaller)["tfr_1980"]
+impacto_1sd_2000_white_smaller_tfr_4 <- coef_tfr_2000_white_smaller_tfr_4 * sd_tfr_2000_white_smaller_tfr_4
+
+## black
+sd_tfr_2000_black_smaller_tfr_4 <- weighted_sd(data_black_without_33_2000$tfr_1980, data_black_without_33_2000$P001)
+
+coef_tfr_2000_black_smaller_tfr_4 <- coef(children_2000_4_rob_tfr_black_smaller)["tfr_1980"]
+impacto_1sd_2000_black_smaller_tfr_4 <- coef_tfr_2000_white_smaller_tfr_4 * sd_tfr_2000_black_smaller_tfr_4
+
+# 1991
+## white
+sd_tfr_1991_white_smaller_tfr_4 <- weighted_sd(data_white_without_33_1991$tfr_1970, data_white_without_33_1991$V7301)
+
+coef_tfr_1991_white_smaller_tfr_4 <- coef(children_1991_4_rob_tfr_white_smaller)["tfr_1970"]
+impacto_1sd_1991_white_smaller_tfr_4 <- coef_tfr_1991_white_smaller_tfr_4 * sd_tfr_1991_white_smaller_tfr_4
+
+## black
+sd_tfr_1991_black_smaller_tfr_4 <- weighted_sd(data_black_without_33_1991$tfr_1970, data_black_without_33_1991$V7301)
+
+coef_tfr_1991_black_smaller_tfr_4 <- coef(children_1991_4_rob_tfr_black_smaller)["tfr_1970"]
+impacto_1sd_1991_black_smaller_tfr_4 <- coef_tfr_1991_white_smaller_tfr_4 * sd_tfr_1991_black_smaller_tfr_4
+```
+
+### Graph 1991, 2000 and 2010 - rob race (with female education)
+```{r graph all rob race smaller 4}
+models <- c(
+"children_1991_4_rob_tfr_white_smaller", "children_1991_4_rob_tfr_black_smaller", "children_2000_4_rob_tfr_white_smaller", "children_2000_4_rob_tfr_black_smaller", "children_2010_4_rob_tfr_white_smaller", "children_2010_4_rob_tfr_black_smaller"
+  )
+coef_values <- c(
+  impacto_1sd_1991_white_smaller_tfr_4, impacto_1sd_1991_black_smaller_tfr_4, impacto_1sd_2000_white_smaller_tfr_4, impacto_1sd_2000_black_smaller_tfr_4,
+  impacto_1sd_2010_white_smaller_tfr_4, impacto_1sd_2010_black_smaller_tfr_4)
+
+se_values <- c(sd_tfr_1991_white_smaller_tfr_4, sd_tfr_1991_black_smaller_tfr_4, sd_tfr_2000_white_smaller_tfr_4, sd_tfr_2000_black_smaller_tfr_4,sd_tfr_2010_white_smaller_tfr_4, sd_tfr_2010_black_smaller_tfr_4)
+
+# Calcule automaticamente os intervalos de confiança de 95%
+ci_lower_values <- coef_values - 1.96 * se_values
+ci_upper_values <- coef_values + 1.96 * se_values
+
+# Crie o dataframe com os resultados
+regression_results <- data.frame(
+  model = models,
+  coef = coef_values,
+  ci_lower = ci_lower_values,
+  ci_upper = ci_upper_values
+)
+
+# Calcule a média dos coeficientes para a linha de referência
+mean_coef <- mean(regression_results$coef)
+
+# Define custom labels to apply only to positions 1, 3, and 5
+custom_labels <- c("White", "Black/Brown", 
+                   "White", "Black/Brown", 
+                   "White", "Black/Brown")
+
+# Gráfico com estilo ajustado e legenda personalizada
+children_all_rob_smaller_race <- ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(aes(color = custom_labels), size = 3) +  # Usando cores para diferenciar os labels
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper, color = custom_labels), 
+                width = 0.2) +
+  geom_hline(yintercept = mean_coef, linetype = "solid", color = "red", size = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "blue") +
+  labs(
+    x = "Model Specifications",
+    y = "Increase in the Number of Children",
+    title = "Race: Migrant Fertility Without Outliers - 1991, 2000, and 2010",
+    subtitle = "A one sd increase in TFR (1970, 1980, and 1991) is associated with an increase in migrant fertility."
+  ) +
+  scale_x_discrete(
+    labels = c("1991", "1991", 
+               "2000", "2000", 
+               "2010", "2010")
+  ) +
+  geom_text(aes(label = round(coef, 3)), vjust = -1.5, color = "darkcyan", size = 4) +
+  theme_minimal() +
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA),
+    legend.position = "right"
+  ) +
+  scale_color_manual(values = c("darkcyan", "gray40"), 
+                     name = "Race", 
+                     labels = c("White", "Black/Brown"))  # Define as cores e os labels na legenda
+
+# Salvar o gráfico
+ggsave(filename = "D:/1_migration/4_results_migrants/graphs/fertility_all_race_4_rob_smaller_state.png", 
+       plot = children_all_rob_smaller_race, 
+       width = 10, height = 6, dpi = 300)
+```
+
+Without female education levels.
+## 1991
+### white
+```{r children 1991 4 rob higher tfr white}
+children_1991_5_rob_tfr_white_higher <- feols(children~ tfr_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |V1102, data = data_white_without_13_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_5_rob_tfr_white_higher)
+etable(children_1991_5_rob_tfr_white_higher, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 1991 4 rob smallest tfr white}
+children_1991_5_rob_tfr_white_smaller <- feols(children~ tfr_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |V1102, data = data_white_without_33_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_5_rob_tfr_white_smaller)
+etable(children_1991_5_rob_tfr_white_smaller, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+### black
+```{r children 1991 4 rob higher tfr black}
+children_1991_5_rob_tfr_black_higher <- feols(children~ tfr_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |V1102, data = data_black_without_13_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_5_rob_tfr_black_higher)
+etable(children_1991_5_rob_tfr_black_higher, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 1991 4 rob smallest tfr black}
+children_1991_5_rob_tfr_black_smaller <- feols(children~ tfr_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |V1102, data = data_black_without_33_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_5_rob_tfr_black_smaller)
+etable(children_1991_5_rob_tfr_black_smaller, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+### white
+```{r children 2000 4 rob higher tfr white}
+children_2000_5_rob_tfr_white_higher <- feols(children ~ tfr_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp |v0103, data = data_white_without_21_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_5_rob_tfr_white_higher)
+etable(children_2000_5_rob_tfr_white_higher, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 2000 4 rob smallest tfr white}
+children_2000_5_rob_tfr_white_smaller <- feols(children ~ tfr_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp |v0103, data = data_white_without_33_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_5_rob_tfr_white_smaller)
+etable(children_2000_5_rob_tfr_white_smaller, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+### black
+```{r children 2000 4 rob higher tfr black}
+children_2000_5_rob_tfr_black_higher <- feols(children ~ tfr_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp |v0103, data = data_black_without_21_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_5_rob_tfr_black_higher)
+etable(children_2000_5_rob_tfr_black_higher, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 2000 4 rob smallest tfr black}
+children_2000_5_rob_tfr_black_smaller <- feols(children ~ tfr_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp |v0103, data = data_black_without_33_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_5_rob_tfr_black_smaller)
+etable(children_2000_5_rob_tfr_black_smaller, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+### white
+```{r children 2010 4 rob higher tfr white higher}
+children_2010_5_rob_tfr_white_higher <- feols(children ~ tfr_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |munic, data = data_white_without_16_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_5_rob_tfr_white_higher)
+etable(children_2010_5_rob_tfr_white_higher, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 2010 4 rob smallest tfr white smaller}
+children_2010_5_rob_tfr_white_smaller <- feols(children ~ tfr_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |munic, data = data_white_without_33_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_5_rob_tfr_white_smaller)
+etable(children_2010_5_rob_tfr_white_smaller, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+### black
+```{r children 2010 4 rob higher tfr black higher}
+children_2010_5_rob_tfr_black_higher <- feols(children ~ tfr_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |munic, data = data_black_without_16_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_5_rob_tfr_black_higher)
+etable(children_2010_5_rob_tfr_black_higher, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 2010 4 rob smallest tfr black smaller}
+children_2010_5_rob_tfr_black_smaller <- feols(children ~ tfr_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |munic, data = data_black_without_33_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_5_rob_tfr_black_smaller)
+etable(children_2010_5_rob_tfr_black_smaller, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+
+#### altogether
+
+```{r 1991 2000 2010 rob children race higher tfr}
+etable(
+  children_1991_5_rob_tfr_white_higher, 
+  children_2000_5_rob_tfr_white_higher,
+  children_2010_5_rob_tfr_white_higher,
+  
+  children_1991_5_rob_tfr_black_higher, 
+  children_2000_5_rob_tfr_black_higher,
+  children_2010_5_rob_tfr_black_higher
+  , tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r tfr rob race higher tfr per state 5}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+# 2010
+## white
+sd_tfr_2010_white_higher_tfr_5 <- weighted_sd(data_white_without_16_2010$tfr_1991, data_white_without_16_2010$peso_pess)
+
+coef_tfr_2010_white_higher_tfr_5 <- coef(children_2010_5_rob_tfr_white_higher)["tfr_1991"]
+impacto_1sd_2010_white_higher_tfr_5 <- coef_tfr_2010_white_higher_tfr_5 * sd_tfr_2010_white_higher_tfr_5
+
+## black
+sd_tfr_2010_black_higher_tfr_5 <- weighted_sd(data_black_without_16_2010$tfr_1991, data_black_without_16_2010$peso_pess)
+
+coef_tfr_2010_black_higher_tfr_5 <- coef(children_2010_5_rob_tfr_black_higher)["tfr_1991"]
+impacto_1sd_2010_black_higher_tfr_5 <- coef_tfr_2010_white_higher_tfr_5 * sd_tfr_2010_black_higher_tfr_5
+
+# 2000
+## white
+sd_tfr_2000_white_higher_tfr_5 <- weighted_sd(data_white_without_21_2000$tfr_1980, data_white_without_21_2000$P001)
+
+coef_tfr_2000_white_higher_tfr_5 <- coef(children_2000_5_rob_tfr_white_higher)["tfr_1980"]
+impacto_1sd_2000_white_higher_tfr_5 <- coef_tfr_2000_white_higher_tfr_5 * sd_tfr_2000_white_higher_tfr_5
+
+## black
+sd_tfr_2000_black_higher_tfr_5 <- weighted_sd(data_black_without_21_2000$tfr_1980, data_black_without_21_2000$P001)
+
+coef_tfr_2000_black_higher_tfr_5 <- coef(children_2000_5_rob_tfr_black_higher)["tfr_1980"]
+impacto_1sd_2000_black_higher_tfr_5 <- coef_tfr_2000_white_higher_tfr_5 * sd_tfr_2000_black_higher_tfr_5
+
+# 1991
+## white
+sd_tfr_1991_white_higher_tfr_5 <- weighted_sd(data_white_without_13_1991$tfr_1970, data_white_without_13_1991$V7301)
+
+coef_tfr_1991_white_higher_tfr_5 <- coef(children_1991_5_rob_tfr_white_higher)["tfr_1970"]
+impacto_1sd_1991_white_higher_tfr_5 <- coef_tfr_1991_white_higher_tfr_5 * sd_tfr_1991_white_higher_tfr_5
+
+## black
+sd_tfr_1991_black_higher_tfr_5 <- weighted_sd(data_black_without_13_1991$tfr_1970, data_black_without_13_1991$V7301)
+
+coef_tfr_1991_black_higher_tfr_5 <- coef(children_1991_5_rob_tfr_black_higher)["tfr_1970"]
+impacto_1sd_1991_black_higher_tfr_5 <- coef_tfr_1991_white_higher_tfr_5 * sd_tfr_1991_black_higher_tfr_5
+```
+
+```{r graph all rob race higher 5}
+models <- c(
+"children_1991_5_rob_tfr_white_higher", "children_1991_5_rob_tfr_black_higher", "children_2000_5_rob_tfr_white_higher", "children_2000_5_rob_tfr_black_higher", "children_2010_5_rob_tfr_white_higher", "children_2010_5_rob_tfr_black_higher"
+  )
+coef_values <- c(
+  impacto_1sd_1991_white_higher_tfr_5, impacto_1sd_1991_black_higher_tfr_5, impacto_1sd_2000_white_higher_tfr_5, impacto_1sd_2000_black_higher_tfr_5,
+  impacto_1sd_2010_white_higher_tfr_5, impacto_1sd_2010_black_higher_tfr_5)
+
+se_values <- c(sd_tfr_1991_white_higher_tfr_5, sd_tfr_1991_black_higher_tfr_5, sd_tfr_2000_white_higher_tfr_5, sd_tfr_2000_black_higher_tfr_5,sd_tfr_2010_white_higher_tfr_5, sd_tfr_2010_black_higher_tfr_5)
+
+# Calcule automaticamente os intervalos de confiança de 95%
+ci_lower_values <- coef_values - 1.96 * se_values
+ci_upper_values <- coef_values + 1.96 * se_values
+
+# Crie o dataframe com os resultados
+regression_results <- data.frame(
+  model = models,
+  coef = coef_values,
+  ci_lower = ci_lower_values,
+  ci_upper = ci_upper_values
+)
+
+# Calcule a média dos coeficientes para a linha de referência
+mean_coef <- mean(regression_results$coef)
+
+# Define custom labels to apply only to positions 1, 3, and 5
+custom_labels <- c("White", "Black/Brown", 
+                   "White", "Black/Brown", 
+                   "White", "Black/Brown")
+
+# Gráfico com estilo ajustado e legenda personalizada
+children_all_rob_higher_race <- ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(aes(color = custom_labels), size = 3) +  # Usando cores para diferenciar os labels
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper, color = custom_labels), 
+                width = 0.2) +
+  geom_hline(yintercept = mean_coef, linetype = "solid", color = "red", size = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "blue") +
+  labs(
+    x = "Model Specifications",
+    y = "Increase in the Number of Children",
+    title = "Race: Migrant Fertility Without Outliers - 1991, 2000, and 2010",
+    subtitle = "A one sd increase in TFR (1970, 1980, and 1991) is associated with an increase in migrant fertility."
+  ) +
+  scale_x_discrete(
+    labels = c("1991", "1991", 
+               "2000", "2000", 
+               "2010", "2010")
+  ) +
+  geom_text(aes(label = round(coef, 3)), vjust = -1.5, color = "darkcyan", size = 4) +
+  theme_minimal() +
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA),
+    legend.position = "right"
+  ) +
+  scale_color_manual(values = c("darkcyan", "gray40"), 
+                     name = "Race", 
+                     labels = c("White", "Black/Brown"))  # Define as cores e os labels na legenda
+
+# Salvar o gráfico
+ggsave(filename = "D:/1_migration/4_results_migrants/graphs/fertility_all_race_5_rob_higher_state.png", 
+       plot = children_all_rob_higher_race, 
+       width = 10, height = 6, dpi = 300)
+```
+
+```{r 1991 2000 2010 rob children race smallest tfr}
+etable(
+  children_1991_5_rob_tfr_white_smaller, 
+  children_2000_5_rob_tfr_white_smaller,
+  children_2010_5_rob_tfr_white_smaller,
+  
+  children_1991_5_rob_tfr_black_smaller, 
+  children_2000_5_rob_tfr_black_smaller,
+  children_2010_5_rob_tfr_black_smaller
+
+  , tex = TRUE, dict = var_labels, digits = "r4")
+
+```
+
+```{r tfr rob race smaller tfr per state 5}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+# 2010
+## white
+sd_tfr_2010_white_smaller_tfr_5 <- weighted_sd(data_white_without_33_2010$tfr_1991, data_white_without_33_2010$peso_pess)
+
+coef_tfr_2010_white_smaller_tfr_5 <- coef(children_2010_5_rob_tfr_white_smaller)["tfr_1991"]
+impacto_1sd_2010_white_smaller_tfr_5 <- coef_tfr_2010_white_smaller_tfr_5 * sd_tfr_2010_white_smaller_tfr_5
+
+## black
+sd_tfr_2010_black_smaller_tfr_5 <- weighted_sd(data_black_without_33_2010$tfr_1991, data_black_without_33_2010$peso_pess)
+
+coef_tfr_2010_black_smaller_tfr_5 <- coef(children_2010_5_rob_tfr_black_smaller)["tfr_1991"]
+impacto_1sd_2010_black_smaller_tfr_5 <- coef_tfr_2010_white_smaller_tfr_5 * sd_tfr_2010_black_smaller_tfr_5
+
+# 2000
+## white
+sd_tfr_2000_white_smaller_tfr_5 <- weighted_sd(data_white_without_33_2000$tfr_1980, data_white_without_33_2000$P001)
+
+coef_tfr_2000_white_smaller_tfr_5 <- coef(children_2000_5_rob_tfr_white_smaller)["tfr_1980"]
+impacto_1sd_2000_white_smaller_tfr_5 <- coef_tfr_2000_white_smaller_tfr_5 * sd_tfr_2000_white_smaller_tfr_5
+
+## black
+sd_tfr_2000_black_smaller_tfr_5 <- weighted_sd(data_black_without_33_2000$tfr_1980, data_black_without_33_2000$P001)
+
+coef_tfr_2000_black_smaller_tfr_5 <- coef(children_2000_5_rob_tfr_black_smaller)["tfr_1980"]
+impacto_1sd_2000_black_smaller_tfr_5 <- coef_tfr_2000_white_smaller_tfr_5 * sd_tfr_2000_black_smaller_tfr_5
+
+# 1991
+## white
+sd_tfr_1970_white_smaller_tfr_5 <- weighted_sd(data_white_without_33_1991$tfr_1970, data_white_without_33_1991$V7301)
+
+coef_tfr_1970_white_smaller_tfr_5 <- coef(children_1991_5_rob_tfr_white_smaller)["tfr_1970"]
+impacto_1sd_1991_white_smaller_tfr_5 <- coef_tfr_1970_white_smaller_tfr_5 * sd_tfr_1970_white_smaller_tfr_5
+
+## black
+sd_tfr_1970_black_smaller_tfr_5 <- weighted_sd(data_black_without_13_1991$tfr_1970, data_black_without_33_1991$V7301)
+
+coef_tfr_1970_black_smaller_tfr_5 <- coef(children_1991_5_rob_tfr_black_smaller)["tfr_1970"]
+impacto_1sd_1991_black_smaller_tfr_5 <- coef_tfr_1970_white_smaller_tfr_5 * sd_tfr_1970_black_smaller_tfr_5
+```
+
+```{r graph all rob race smaller 5}
+models <- c(
+"children_1991_5_rob_tfr_white_smaller", "children_1991_5_rob_tfr_black_smaller", "children_2000_5_rob_tfr_white_smaller", "children_2000_5_rob_tfr_black_smaller", "children_2010_5_rob_tfr_white_smaller", "children_2010_5_rob_tfr_black_smaller"
+  )
+coef_values <- c(
+  impacto_1sd_1991_white_smaller_tfr_5, impacto_1sd_1991_black_smaller_tfr_5, impacto_1sd_2000_white_smaller_tfr_5, impacto_1sd_2000_black_smaller_tfr_5,
+  impacto_1sd_2010_white_smaller_tfr_5, impacto_1sd_2010_black_smaller_tfr_5)
+
+se_values <- c(sd_tfr_1991_white_smaller_tfr_5, sd_tfr_1991_black_smaller_tfr_5, sd_tfr_2000_white_smaller_tfr_5, sd_tfr_2000_black_smaller_tfr_5,sd_tfr_2010_white_smaller_tfr_5, sd_tfr_2010_black_smaller_tfr_5)
+
+# Calcule automaticamente os intervalos de confiança de 95%
+ci_lower_values <- coef_values - 1.96 * se_values
+ci_upper_values <- coef_values + 1.96 * se_values
+
+# Crie o dataframe com os resultados
+regression_results <- data.frame(
+  model = models,
+  coef = coef_values,
+  ci_lower = ci_lower_values,
+  ci_upper = ci_upper_values
+)
+
+# Calcule a média dos coeficientes para a linha de referência
+mean_coef <- mean(regression_results$coef)
+
+# Define custom labels to apply only to positions 1, 3, and 5
+custom_labels <- c("White", "Black/Brown", 
+                   "White", "Black/Brown", 
+                   "White", "Black/Brown")
+
+# Gráfico com estilo ajustado e legenda personalizada
+children_all_rob_smaller_race <- ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(aes(color = custom_labels), size = 3) +  # Usando cores para diferenciar os labels
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper, color = custom_labels), 
+                width = 0.2) +
+  geom_hline(yintercept = mean_coef, linetype = "solid", color = "red", size = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "blue") +
+  labs(
+    x = "Model Specifications",
+    y = "Increase in the Number of Children",
+    title = "Race: Migrant Fertility Without Outliers - 1991, 2000, and 2010",
+    subtitle = "A one sd increase in TFR (1970, 1980, and 1991) is associated with an increase in migrant fertility."
+  ) +
+  scale_x_discrete(
+    labels = c("1991", "1991", 
+               "2000", "2000", 
+               "2010", "2010")
+  ) +
+  geom_text(aes(label = round(coef, 3)), vjust = -1.5, color = "darkcyan", size = 4) +
+  theme_minimal() +
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA),
+    legend.position = "right"
+  ) +
+  scale_color_manual(values = c("darkcyan", "gray40"), 
+                     name = "Race", 
+                     labels = c("White", "Black/Brown"))  # Define as cores e os labels na legenda
+
+# Salvar o gráfico
+ggsave(filename = "D:/1_migration/4_results_migrants/graphs/fertility_all_race_5_rob_smaller_state.png", 
+       plot = children_all_rob_smaller_race, 
+       width = 10, height = 6, dpi = 300)
+```
+
+> # Robustness - children female age
+
+Mulheres somente entre 40-49 anos
+
+## 1991
+```{r children 1991 4 age 40-49}
+children_1991_4_rob_40_49 <- feols(children~ tfr_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp  |V1102, data = data_40_49_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4_rob_40_49)
+etable(children_1991_4_rob_40_49, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 1991 5 age 40-49}
+children_1991_5_rob_40_49 <- feols(children~ tfr_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp  |V1102, data = data_40_49_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_5_rob_40_49)
+etable(children_1991_5_rob_40_49, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+```{r children 2000 4 age 40-49}
+children_2000_4_rob_40_49 <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp |v0103, data = data_40_49_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4_rob_40_49)
+etable(children_2000_4_rob_40_49, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 2000 5 age 40-49}
+children_2000_5_rob_40_49 <- feols(children ~ tfr_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp |v0103, data = data_40_49_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_5_rob_40_49)
+etable(children_2000_5_rob_40_49, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+```{r children 2010 4 age 40-49}
+children_2010_4_rob_40_49 <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |munic, data = data_40_49_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4_rob_40_49)
+etable(children_2010_4_rob_40_49, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 2010 5 age 40-49}
+children_2010_5_rob_40_49 <- feols(children ~ tfr_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |munic, data = data_40_49_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_5_rob_40_49)
+etable(children_2010_5_rob_40_49, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r 1991 2000 2010 rob }
+etable(children_1991_4_rob_40_49,children_1991_5_rob_40_49, children_2000_4_rob_40_49, children_2000_5_rob_40_49, children_2010_4_rob_40_49,children_2010_5_rob_40_49, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r tfr rob tfr age 40-49}
+weighted_sd <- function(x, w) {
+  weighted_mean <- sum(w * x, na.rm = TRUE) / sum(w, na.rm = TRUE)
+  sqrt(sum(w * (x - weighted_mean)^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+# 2010
+
+## 4
+sd_tfr_2010_40_49_4 <- weighted_sd(data_40_49_2010$tfr_1991, data_40_49_2010$peso_pess)
+
+coef_tfr_2010_40_49_4 <- coef(children_2010_4_rob_40_49)["tfr_1991"]
+impacto_1sd_2010_40_49_4 <- coef_tfr_2010_40_49_4 * sd_tfr_2010_40_49_4
+
+## 5
+sd_tfr_2010_40_49_5 <- weighted_sd(data_40_49_2010$tfr_1991, data_40_49_2010$peso_pess)
+
+coef_tfr_2010_40_49_5 <- coef(children_2010_5_rob_40_49)["tfr_1991"]
+impacto_1sd_2010_40_49_5 <- coef_tfr_2010_40_49_5 * sd_tfr_2010_40_49_5
+
+# 2000
+## 4
+sd_tfr_2000_40_49_4 <- weighted_sd(data_40_49_2000$tfr_1980, data_40_49_2000$P001)
+
+coef_tfr_2000_40_49_4 <- coef(children_2000_4_rob_40_49)["tfr_1980"]
+impacto_1sd_2000_40_49_4 <- coef_tfr_2000_40_49_4 * sd_tfr_2000_40_49_4
+
+## 5
+sd_tfr_2000_40_49_5 <- weighted_sd(data_40_49_2000$tfr_1980, data_40_49_2000$P001)
+
+coef_tfr_2000_40_49_5 <- coef(children_2000_5_rob_40_49)["tfr_1980"]
+impacto_1sd_2000_40_49_5 <- coef_tfr_2000_40_49_5 * sd_tfr_2000_40_49_5
+
+# 1991
+## 4
+sd_tfr_1991_40_49_4 <- weighted_sd(data_40_49_1991$tfr_1970, data_40_49_1991$V7301)
+
+coef_tfr_1991_40_49_4 <- coef(children_1991_4_rob_40_49)["tfr_1970"]
+impacto_1sd_1991_40_49_4 <- coef_tfr_1991_40_49_4 * sd_tfr_1991_40_49_4
+
+## 5
+sd_tfr_1991_40_49_5 <- weighted_sd(data_40_49_1991$tfr_1970, data_40_49_1991$V7301)
+
+coef_tfr_1991_40_49_5 <- coef(children_1991_5_rob_40_49)["tfr_1970"]
+impacto_1sd_1991_40_49_5 <- coef_tfr_1991_40_49_5 * sd_tfr_1991_40_49_5
+
+```
+
+```{r graph all rob 40-49 5}
+models <- c(
+"children_1991_4_rob_40_49","children_1991_5_rob_40_49", "children_2000_4_rob_40_49", "children_2000_5_rob_40_49", "children_2010_4_rob_40_49","children_2010_5_rob_40_49"  )
+coef_values <- c(
+  impacto_1sd_1991_40_49_4, impacto_1sd_1991_40_49_5, impacto_1sd_2000_40_49_4, impacto_1sd_2000_40_49_5,
+  impacto_1sd_2010_40_49_4, impacto_1sd_2010_40_49_5)
+
+se_values <- c(sd_tfr_1991_40_49_4, sd_tfr_1991_40_49_5, sd_tfr_2000_40_49_4, sd_tfr_2000_40_49_5,sd_tfr_2010_40_49_4, sd_tfr_2010_40_49_5)
+
+# Calcule automaticamente os intervalos de confiança de 95%
+ci_lower_values <- coef_values - 1.96 * se_values
+ci_upper_values <- coef_values + 1.96 * se_values
+
+# Crie o dataframe com os resultados
+regression_results <- data.frame(
+  model = models,
+  coef = coef_values,
+  ci_lower = ci_lower_values,
+  ci_upper = ci_upper_values
+)
+
+# Calcule a média dos coeficientes para a linha de referência
+mean_coef <- mean(regression_results$coef)
+
+# Define custom labels to apply only to positions 1, 3, and 5
+custom_labels <- c("Excluding High TFR State", "Excluding Low TFR State", 
+                   "Excluding High TFR State", "Excluding Low TFR State", 
+                   "Excluding High TFR State", "Excluding Low TFR State")
+
+# Gráfico com estilo ajustado e legenda personalizada
+children_all_rob_40_49 <- ggplot(regression_results, aes(x = model, y = coef)) +
+  geom_point(aes(color = custom_labels), size = 3) +  # Usando cores para diferenciar os labels
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper, color = custom_labels), 
+                width = 0.2) +
+  geom_hline(yintercept = mean_coef, linetype = "solid", color = "red", size = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "blue") +
+  labs(
+    x = "Model Specifications",
+    y = "Increase in the Number of Children",
+    title = "Age 40-49: Migrant Fertility - 1991, 2000, and 2010",
+    subtitle = "A one sd increase in TFR (1970, 1980, and 1991) is associated with an increase in migrant fertility."
+  ) +
+  scale_x_discrete(
+    labels = c("1991", "1991", 
+               "2000", "2000", 
+               "2010", "2010")
+  ) +
+  geom_text(aes(label = round(coef, 3)), vjust = -1.5, color = "darkcyan", size = 4) +
+  theme_minimal() +
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA),
+    legend.position = "right"
+  ) +
+  scale_color_manual(values = c("darkcyan", "gray40"), 
+                     name = "Female Education", 
+                     labels = c("With Female Education", "Without Female Education"))  # Define as cores e os labels na legenda
+
+# Salvar o gráfico
+ggsave(filename = "D:/1_migration/4_results_migrants/graphs/fertility_all_rob_40_49.png", 
+       plot = children_all_rob_40_49, 
+       width = 10, height = 6, dpi = 300)
+```
+
+
+Quais são os estados que receberam mais imigrantes e os que mandaram mais pessoas?
+
+```{r emigracao e imigracao}
+top_emigration <- data %>%
+  group_by(uf_nascim) %>%
+  summarise(emigrantes = n()) %>%
+  arrange(desc(emigrantes)) %>%
+  slice_head(n = 5)
+
+top_immigration <- data %>%
+  group_by(uf) %>%
+  summarise(imigrantes = n()) %>%
+  arrange(desc(imigrantes)) %>%
+  slice_head(n = 5)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+> ## State: summary statistics
+
+### 30-49: work
+```{r summary statistics work}
+library(xtable)
+library(kableExtra)
+
+stat_1991 <- data_1991 %>%
+  group_by(uf_nascim) %>%
+  summarise(
+    prop_ocup = mean(ocupada_migrante_15, na.rm = TRUE),
+    sd_ocup = sd(ocupada_migrante_15, na.rm = TRUE),
+
+    mean_children = mean(children, na.rm = TRUE),
+    sd_children = sd(children, na.rm = TRUE),
+
+    mean_lfp = mean(lfp_uf_30_49_1970, na.rm = TRUE),
+    sd_lfp = sd(lfp_uf_30_49_1970, na.rm = TRUE),
+
+    mean_tfr = mean(tfr_1970, na.rm = TRUE),
+    sd_tfr = sd(tfr_1970, na.rm = TRUE),
+  ) |> 
+  mutate(Year = 1991)
+
+stat_2000 <- data_2000 %>%
+  group_by(uf_nascim) %>%
+  summarise(
+    prop_ocup = mean(ocupada_migrante_15, na.rm = TRUE),
+    sd_ocup = sd(ocupada_migrante_15, na.rm = TRUE),
+
+    mean_children = mean(children, na.rm = TRUE),
+    sd_children = sd(children, na.rm = TRUE),
+
+    mean_lfp = mean(lfp_uf_30_49_1980, na.rm = TRUE),
+    sd_lfp = sd(lfp_uf_30_49_1980, na.rm = TRUE),
+
+    mean_tfr = mean(tfr_1980, na.rm = TRUE),
+    sd_tfr = sd(tfr_1970, na.rm = TRUE),
+  )|> 
+  mutate(Year = 2000)
+
+stat_2010 <- data_2010 %>%
+  group_by(uf_nascim) %>%
+  summarise(
+    prop_ocup = mean(ocup_migrante, na.rm = TRUE),
+    sd_ocup = sd(ocup_migrante, na.rm = TRUE),
+
+    mean_children = mean(children, na.rm = TRUE),
+    sd_children = sd(children, na.rm = TRUE),
+
+    mean_lfp = mean(lfp_uf_30_49_1991, na.rm = TRUE),
+    sd_lfp = sd(lfp_uf_30_49_1991, na.rm = TRUE),
+
+    mean_tfr = mean(tfr_1991, na.rm = TRUE),
+    sd_tfr = sd(tfr_1991, na.rm = TRUE),
+  )|> 
+  mutate(Year = 2010)
+
+combined_stats <- bind_rows(stat_1991, stat_2000, stat_2010)
+combined_stats_wide <- combined_stats %>%
+  pivot_wider(
+    names_from = Year,
+    values_from = c(prop_ocup, sd_ocup, mean_children, sd_children, mean_lfp, sd_lfp, mean_tfr, sd_tfr),
+    names_sep = "_"
+  )
+
+# Exibir a tabela com os anos como cabeçalho
+combined_stats_wide %>%
+  kable("latex", booktabs = TRUE, col.names = c("UF", 
+                                                "Prop. Ocup. 1991", "SD Ocup. 1991", "Mean Children 1991", "SD Children 1991", 
+                                                "Mean LFP 1991", "SD LFP 1991", "Mean TFR 1991", "SD TFR 1991",
+                                                "Prop. Ocup. 2000", "SD Ocup. 2000", "Mean Children 2000", "SD Children 2000",
+                                                "Mean LFP 2000", "SD LFP 2000", "Mean TFR 2000", "SD TFR 2000",
+                                                "Prop. Ocup. 2010", "SD Ocup. 2010", "Mean Children 2010", "SD Children 2010",
+                                                "Mean LFP 2010", "SD LFP 2010", "Mean TFR 2010", "SD TFR 2010")) %>%
+  kable_styling(latex_options = c("hold_position"))
+
+
+
+```
+
+### 30-49: children
+```{r summary statistics children}
+estatisticas_descritivas_30_49 <- data_1991 %>%
+  group_by(uf_nascim) %>%
+  summarise(
+    prop_ocup_wgt = mean(ocupada_migrante_15, na.rm = TRUE),
+    sd_ocup_wgt = sd(ocupada_migrante_15, na.rm = TRUE),
+
+    mean_children = mean(children, na.rm = TRUE),
+    sd_children = sd(children, na.rm = TRUE),
+
+    mean_lfp = mean(lfp_uf_30_49_1970, na.rm = TRUE),
+    sd_lfp = sd(lfp_uf_30_49_1970, na.rm = TRUE),
+
+    mean_tfr = mean(tfr_1970, na.rm = TRUE),
+    sd_tfr = sd(tfr_1970, na.rm = TRUE),
+  )
+latex_table <- xtable(estatisticas_descritivas_30_49)
+print(latex_table, type = "latex", include.rownames = FALSE)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r image}
+setwd("D:/2_scripts_migration")
+save.image("1991_1970_new.RData")
+```
+

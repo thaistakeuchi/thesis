@@ -1,0 +1,98 @@
+---
+title: "Análise 2010: usando dados de lfp + tfr de 2000"
+author: "Thais Takeuchi"
+date: "2024-10-04"
+output: html_document
+
+
+---
+
+## Load packages
+```{r load, message=FALSE, warning=FALSE, include=FALSE}
+#######################
+# PREPARE ENVIRONMENT
+#######################
+
+rm(list = ls())
+
+load.lib <- c("data.table","foreign","stargazer","devtools","stringi", "srvyr", "survey","tidyverse","gtools", "remote","installr","microdadosBrasil","ggplot2","viridis","hrbrthemes","WDI","dplyr", "arrow", "readxl","rio","writexl","dineq", "basedosdados", "httr", "haven", "openxlsx", "fixest", "readxl")
+
+install.lib <- load.lib[!load.lib %in% installed.packages()]
+for(lib in install.lib) install.packages(lib,dependencies=TRUE)
+sapply(load.lib, require, character=TRUE)
+```
+
+## CENSUS
+```{r census}
+data <- read_parquet("C:/Users/thtak/OneDrive - Fundacao Getulio Vargas - FGV/Tese_Mestrado/1_migration/1_datasets_migrants/censo/2010/base_migracao_final.parquet")
+#copy_data <- copy(data)
+```
+
+### sample characteristics
+```{r}
+# main sample 
+base <- data|> filter(main_sample == 1)
+sum(base$v0010)
+```
+
+# FE Regressions
+
+## Avaliando o impacto da lfp.y da UF de origem sobre as horas trabalhadas da mulher migrante
+### Hours worked - Total
+```{r reg1_2010_lfp_hworked }
+model1_sp_edu_income <- feols(hworked_fem_mid ~ Women_30_49_2000 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp + children_under_5| factor(age_fem) + age_squared_fem + v1004 + factor(age_fem) + age_squared_fem + age_sp , data = data, weights = ~v0010, cluster = ~uf_nascim)
+summary(model1_sp_edu_income)
+```
+Uma LFP mais alta está associada a um aumento nas horas trabalhadas em $0.044229$, o p-valor ($0.10771$) sugere que o efeito não é estatisticamente significativo ao nível de 5%. Quanto maior a escolaridade da mulher, mais horas ela tende a trabalhar, caindo do ensino médio para o superior. Em geral, a escolaridade do cônjuge também está associada a mais horas trabalhadas pela mulher. Quanto maior a renda do cônjuge, menor o número de horas que a mulher tende a trabalhar ($-0.000903$). Isso pode refletir o "efeito renda", onde um parceiro que ganha mais reduz a necessidade de a mulher trabalhar. Finalmente, a presença de crianças pequenas reduz as horas trabalhadas da mulher, devido às demandas de cuidado infantil.
+
+
+### Hours worked - Brancas
+```{r reg1_2010_lfp_hworked_brancas }
+data_brancas <- data |> 
+  filter(v0606 == 1)
+
+model1_brancas_sp_edu_income <- feols(hworked_fem_mid ~ Women_30_49_2000 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + children_under_5| factor(age_fem) + age_squared_fem + v1004+ age_sp , data = data_brancas, weights = ~v0010, cluster = ~uf_nascim)
+summary(model1_brancas_sp_edu_income)
+```
+Para mulheres brancas, a lfp do seu estado de origem tem uma menor influência sobre suas horas trabalhadas no estado de destino, e o efeito de seu parceiro ter ensino superior completo faz com que elas trabalhem menos horas, diferentemente da amostra geral.
+
+### Hours worked - Pretas
+```{r reg1_2010_lfp_hworked_pretas}
+data_pretas <- data |> 
+  filter(v0606 %in% c(2,4))
+
+model1_preta_sp_edu_income <- feols(hworked_fem_mid ~ Women_30_49_2000 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + children_under_5| factor(age_fem) + age_squared_fem + v1004 + age_sp , data = data_pretas, weights = ~v0010, cluster = ~uf_nascim)
+summary(model1_preta_sp_edu_income)
+```
+Para as pretas e pardas a lfp do estado de origem tem uma influência ainda menor do que para a amostra geral e para mulheres brancas. E o fato de seu marido ter ensino superior faz com que elas tenham um aumento de $0.478497$ de suas horas trabalhadas por semana e, mesmo o marido ganhando uma renda maior que $1000$ reais, elas ainda continuam trabalhando mais tempo, diferentemente da amostra geral e de mulheres brancas. Além disso, o efeito de ter uma criança pequena em casa diminui em menos suas horas trabalhadas, quando comparadas com o restante das mulheres.
+
+
+## Avaliando o impacto da tfr.y da UF de origem sobre o número de filhos da mulher migrante
+## Number of children
+
+Quanto maior a tfr do estado de origem e quando o marido tem o ensino fundamental e médio completos, maior chance de uma mulher ter filhos. Por outro lado, quanto maior a escolaridade da mulher, quando seu marido tem o ensino superior completo ou quando a renda do cônjuge é maior, menor a chance deles terem filhos. Isso se mostra mais intenso para mulheres pretas ou pardas.
+
+
+### Number of children - Total
+```{r reg1_2010_tfr_children}
+model1_sp_edu_income <- feols(children ~ tfr.y + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp | factor(age_fem) + age_squared_fem + v1004  + age_sp , data = data, weights = ~v0010, cluster = ~uf_nascim)
+summary(model1_sp_edu_income)
+```
+
+### Number of children - Brancas
+```{r reg1_2010_tfr_children_brancas}
+model1_sp_edu_income <- feols(children ~ tfr.y + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp | factor(age_fem) + age_squared_fem + v1004  + age_sp , data = data_brancas, weights = ~v0010, cluster = ~uf_nascim)
+summary(model1_sp_edu_income)
+```
+
+### Number of children - Pretas
+```{r reg1_2010_tfr_children_pretas}
+model1_sp_edu_income <- feols(children ~ tfr.y + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp | factor(age_fem) + age_squared_fem + v1004 + age_sp , data = data_pretas, weights = ~v0010, cluster = ~uf_nascim)
+summary(model1_sp_edu_income)
+```
+
+```{r image}
+setwd("C:/Users/thtak/OneDrive - Fundacao Getulio Vargas - FGV/Tese_Mestrado/1_migration/2_scripts_migration")
+#save.image("2010_2000.RData")
+```
+

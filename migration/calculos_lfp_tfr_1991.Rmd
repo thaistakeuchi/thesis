@@ -1,0 +1,121 @@
+---
+title: "Análise 2000: usando dados de lfp + tfr de 1991 (em linha com o paper aer ff2009)"
+author: "Thais Takeuchi"
+date: "2024-09-29"
+output: html_document
+---
+## Load packages
+```{r load, include = FALSE, message = FALSE, warning=FALSE}
+#######################
+# PREPARE ENVIRONMENT
+#######################
+
+rm(list = ls())
+
+load.lib <- c("data.table","foreign","stargazer","devtools","stringi", "srvyr", "survey","tidyverse","gtools", "remote","installr","microdadosBrasil","ggplot2","viridis","hrbrthemes","WDI","dplyr", "arrow", "readxl","rio","writexl","dineq", "basedosdados", "httr", "haven", "openxlsx", "fixest", "readxl")
+
+install.lib <- load.lib[!load.lib %in% installed.packages()]
+for(lib in install.lib) install.packages(lib,dependencies=TRUE)
+sapply(load.lib, require, character=TRUE)
+```
+
+## CENSUS
+```{r census}
+# pegando uma amostra do censo_1991
+porcentagem <- 0.10
+n_linhas <- floor(nrow(censo_1991) * porcentagem)
+data_1991 <- censo_1991[sample(1:nrow(censo_1991), n_linhas), ]
+
+
+estados <- c("RO", "AC", "AM", "RR", "PA", "AP")
+data_1991 <- data_1980 %>%
+  filter(!(v514 == "Só na zona rural" & UF %in% estados)) |> 
+  filter(V3072 >= 10)
+
+
+```
+
+## LFP (labor force productivity)
+#### 1980
+
+As autoras pegam o censo de 1970 e olham para lfp e tfr de 1950 já que estão tratando de imigrantes de segunda geração. No nosso caso iremos pegar esses dados de 1980/1990 quando olhamos para 2000.
+
+```{r lfp 1980}
+
+# numero de mulheres ocupadas com mais de 10 anos
+data_1991$V0301 <- as_factor(data_1991$V0301)
+
+teste <- data_1991[(data_1991$V0345 == 1 | data_1991$V0345 == 2) & data_1991$V3072 >= 10 & data_1991$V0301 == "Feminino", ]
+sum(teste$V7301, na.rm = TRUE)
+
+# calculo da pea para mulheres de 30-50 anos por uf
+## https://seculoxx.ibge.gov.br/populacionais-sociais-politicas-e-culturais/busca-por-palavra-chave/populacao.html
+pea_mulher_30_50 <- data_1991 |>
+  filter((V0345 == 1 | V0345 == 2) & ((V3072 >= 30 & V3072 <= 39)) & V0301 == "Feminino")
+
+soma_pea_mulher_30_50_por_uf <- pea_mulher_30_50 |>
+  group_by(UF) |>
+  summarize(soma_pea = sum(V7301, na.rm = TRUE))
+
+
+# oficial: 7145568
+# censo: 7108364
+
+### https://seculoxx.ibge.gov.br/populacionais-sociais-politicas-e-culturais/busca-por-palavra-chave/populacao.html
+## oficial 30-49: 24709395
+## censo: 25463744
+n_30_39_anos <- data_1991 |>
+  filter((V3072 >= 30 & V3072 <= 39))
+
+soma_n_30_39_uf <- n_30_39_anos |>
+  group_by(UF) |>
+  summarize(soma_pop = sum(V7301, na.rm = TRUE))
+
+# taxa de participacao
+f_lfp <- merge(soma_pea_mulher_30_50_por_uf, soma_n_30_39_uf, by = "UF") |> 
+  mutate(lfp_1991 = soma_pea / soma_pop)
+
+uf_codes <- c(
+  "AC" = 12, "AL" = 27, "AM" = 13, "AP" = 16, "BA" = 29, 
+  "CE" = 23, "DF" = 53, "ES" = 32, "FN" = NA, "GO" = 52, 
+  "MA" = 21, "MG" = 31, "MS" = 50, "MT" = 51, "PA" = 15, 
+  "PB" = 25, "PE" = 26, "PI" = 22, "PR" = 41, "RJ" = 33, 
+  "RN" = 24, "RO" = 11, "RR" = 14, "RS" = 43, "SC" = 42, 
+  "SE" = 28, "SP" = 35
+)
+
+f_lfp_1980 <- f_lfp |>
+  mutate(uf_nascim = as.numeric(recode(UF, !!!uf_codes))) |>
+  dplyr::select(-UF) |>
+  filter(!is.na(uf_nascim))
+
+write_xlsx(f_lfp_1980, "C:/Users/thtak/OneDrive - Fundacao Getulio Vargas - FGV/Tese_Mestrado/1_migration/1_datasets_migrants/lfp/f_lfp_1980.xlsx")
+```
+
+Números chegaram a participação de 50\% de mulheres entre 30-39 anos, enquanto os dados oficiais falam em 42,4\%
+
+```{r divergencias tx participacao}
+mean(f_lfp_1980$lfp_1980, na.rm = TRUE)
+```
+
+
+## Taxa fecundidade
+
+#### tx fec 1980
+
+```{r fec 1980}
+tfr_datasus <- read_xlsx("C:/Users/thtak/OneDrive - Fundacao Getulio Vargas - FGV/Tese_Mestrado/1_migration/1_datasets_migrants/fecundidade_brasil/fecundidade_1960_2000_estados.xlsx")
+
+tfr_1980 <- tfr_datasus |>
+  dplyr::select(uf_nascim, "1980") |> 
+  rename("1980_tfr" = "1980")
+
+write_xlsx(tfr_1980, "C:/Users/thtak/OneDrive - Fundacao Getulio Vargas - FGV/Tese_Mestrado/1_migration/1_datasets_migrants/fecundidade_brasil/tfr_1980.xlsx")
+```
+
+```{r baixa base}
+setwd("C:/Users/thtak/OneDrive - Fundacao Getulio Vargas - FGV/Tese_Mestrado/1_migration/2_scripts_migration")
+save.image("2000_1991_calculo_proxy_sample.RData")
+
+```
+

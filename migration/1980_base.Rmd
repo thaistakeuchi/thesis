@@ -1,0 +1,445 @@
+---
+title: "Censo 1980: usando dados de lfp + tfr de 1960"
+author: "Thais Takeuchi"
+date: "2024-10-22"
+output: html_document
+---
+
+## Load packages
+```{r load, message=FALSE, warning=FALSE, include=FALSE}
+#######################
+# PREPARE ENVIRONMENT
+#######################
+
+rm(list = ls())
+
+load.lib <- c("data.table","foreign","stargazer","devtools","stringi", "srvyr", "survey","tidyverse","gtools", "remote","installr","microdadosBrasil","ggplot2","viridis","hrbrthemes","WDI","dplyr", "arrow", "readxl","rio","writexl","dineq", "basedosdados", "httr", "haven", "openxlsx", "fixest", "readxl")
+
+install.lib <- load.lib[!load.lib %in% installed.packages()]
+for(lib in install.lib) install.packages(lib,dependencies=TRUE)
+sapply(load.lib, require, character=TRUE)
+```
+
+## CENSO
+```{r census}
+data_1980 <- arrow::read_parquet("D:/censo_1980/censo_1980_temp.parquet")
+
+setDT(data_1980)
+
+dt <- head(data_1980, 100000)
+
+
+# hh variables
+df_1980 <- dt %>%
+  mutate(sexo = V501,
+        responsavel = as.integer(V503 == 1 | V504 == 1),
+         conjuge = as.integer(V503 == 2 | V504 == 2),
+         casal = as.integer(sum(conjuge) > 0 & sum(responsavel) > 0),
+         casado = as.integer(V526 %in% c(1, 2, 3)),
+         migrante_casada = as.integer((casado == 1 | conjuge == 1 | responsavel == 1) & sexo == 3 & migrante == 1))
+
+df_1980 <- df_1980 %>%
+  group_by(n_domicilio) %>%
+  mutate(count_responsavel = max(responsavel),
+         count_conjuge = max(conjuge),
+         main_sample = max(migrante_casada == 1)) %>%
+  ungroup() %>%
+  filter(count_responsavel == 1 & count_conjuge == 1, main_sample == 1) %>%
+  mutate(age_fem = ifelse(migrante_casada == 1, V606, NA),
+         age_squared_fem = ifelse(migrante_casada == 1, V606^2, NA),
+         age_sp = ifelse(sexo == 1 & (responsavel == 1 | conjuge == 1 | casado == 1), V606, NA))
+
+df_1980 <- df_1980 %>%
+  group_by(n_domicilio) %>%
+  mutate(main_sample = max(migrante_casada == 1)) %>%
+  ungroup() %>%
+  filter(main_sample == 1)
+
+# schooling
+df_1980$menos_fund_mulher <- ifelse(df_1980$migrante_casada == 1 & df_1980$V524 == 2, 1, 0)
+df_1980$menos_fund_homem <- ifelse(df_1980$sexo == 1 & df_1980$V524 == 2, 1, 0)
+
+df_1980$fund_mulher <- ifelse(df_1980$migrante_casada == 1 & df_1980$V524 %in% c(3, 4), 1, 0)
+df_1980$fund_homem <- ifelse(df_1980$sexo == 1 & df_1980$V524 %in% c(3, 4), 1, 0)
+
+df_1980$em_mulher <- ifelse(df_1980$migrante_casada == 1 & df_1980$V524 %in% c(5, 6), 1, 0)
+df_1980$em_homem <- ifelse(df_1980$sexo == 1 & df_1980$V524 %in% c(5, 6), 1, 0)
+
+df_1980$superior_mulher <- ifelse(df_1980$migrante_casada == 1 & df_1980$V524 %in% c(7, 8), 1, 0)
+df_1980$superior_homem <- ifelse(df_1980$sexo == 1 & df_1980$V524 %in% c(7, 8), 1, 0)
+
+df_1980$educ_mulher <- ifelse(df_1980$migrante_casada == 1, df_1980$V524, NA)
+df_1980$educ_homem <- ifelse(df_1980$sexo == 1 & (df_1980$responsavel == 1 | df_1980$conjuge == 1 | df_1980$casado == 1), df_1980$V524, NA)
+
+# occupation
+df_1980$ocup_migrante <- 0
+df_1980$ocup_migrante[df_1980$V528 == 1 & df_1980$migrante_casada == 1] <- 1
+
+# children
+df_1980$children_male <- df_1980$V554
+df_1980$children_male[df_1980$children_male %in% c(98, 99)] <- NA
+
+df_1980$children_female <- df_1980$V555
+df_1980$children_female[df_1980$children_female %in% c(98, 99)] <- NA
+
+df_1980$children <- rowSums(df_1980[, c("children_male", "children_female")], na.rm = TRUE)
+df_1980$children[df_1980$V555 %in% c(98, 99)] <- NA
+
+df_1980$children_under_5 <- 0
+df_1980$children_under_5[df_1980$V570 <= 5] <- 1
+
+# income spouse
+df_1980$income_sp_raw <- NA
+df_1980$income_sp_raw[df_1980$sexo == 1] <- rowSums(df_1980[df_1980$sexo == 1, c("V607", "V608", "V609")], na.rm = TRUE)
+
+# Função que retorna NA quando todos os valores são NA, ao invés de -Inf
+max_with_na <- function(x) {
+  if (all(is.na(x))) {
+    return(NA)
+  } else {
+    return(max(x, na.rm = TRUE))
+  }
+}
+
+# unindo valores maximos no domicilio
+df_1980$max_age_sp <- ave(df_1980$age_sp, df_1980$n_domicilio, FUN = max_with_na)
+df_1980$max_fund_homem <- ave(df_1980$fund_homem, df_1980$n_domicilio, FUN = max_with_na)
+df_1980$max_em_homem <- ave(df_1980$em_homem, df_1980$n_domicilio, FUN = max_with_na)
+df_1980$max_superior_homem <- ave(df_1980$superior_homem, df_1980$n_domicilio, FUN = max_with_na)
+df_1980$max_educ_homem <- ave(df_1980$educ_homem, df_1980$n_domicilio, FUN = max_with_na)
+df_1980$max_income_sp_raw <- ave(df_1980$income_sp_raw, df_1980$n_domicilio, FUN = max_with_na)
+
+df_1980$age_sp[df_1980$migrante_casada == 1] <- df_1980$max_age_sp[df_1980$migrante_casada == 1]
+df_1980$fund_homem[df_1980$migrante_casada == 1] <- df_1980$max_fund_homem[df_1980$migrante_casada == 1]
+df_1980$em_homem[df_1980$migrante_casada == 1] <- df_1980$max_em_homem[df_1980$migrante_casada == 1]
+df_1980$superior_homem[df_1980$migrante_casada == 1] <- df_1980$max_superior_homem[df_1980$migrante_casada == 1]
+df_1980$educ_homem[df_1980$migrante_casada == 1] <- df_1980$max_educ_homem[df_1980$migrante_casada == 1]
+df_1980$income_sp_raw[df_1980$migrante_casada == 1] <- df_1980$max_income_sp_raw[df_1980$migrante_casada == 1]
+
+df_1980 <- df_1980[, !names(df_1980) %in% c("max_age_sp", "max_age_sp_range", "max_fund_homem", 
+                                            "max_em_homem", "max_superior_homem", "max_educ_homem", "max_income_sp_raw")]
+
+
+arrow::write_parquet(data,
+  "D:/1_migration/1_datasets_migrants/censo/1991/censo_1991_migracao_tratada_migrante_15.parquet")
+
+# deixa somente linhas onde migrante_casada_15 == 1
+dt_filtrado <- data[data$migrante_casada_15 == 1, ]
+
+arrow::write_parquet(dt_filtrado, "D:/1_migration/1_datasets_migrants/censo/1991/censo_1991_migracao_tratada_migrante_15_final.parquet")
+
+
+
+dt <- head(data, 100000)
+
+data <- data[, c("migrante_casada_15", "ocupada_migrante_15", "fund_mulher", "em_mulher", 
+                               "superior_mulher", "fund_homem", "em_homem", 
+                               "superior_homem", "income_sp_raw", "age_fem", "age_squared_fem", 
+                               "age_sp", "V5", "V604", "uf_nascim", "children")]
+
+```
+
+
+
+```{r}
+freq_table <- table(data_1980$V524)
+percentages <- prop.table(freq_table) * 100
+percentages
+sum_percentages <- sum(percentages)
+```
+
+
+## LFP
+```{r pnad}
+lfp_1970_uf <- read_xlsx("D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_1970.xlsx")
+```
+
+## TFR
+```{r tfr}
+tfr_1940_1980_uf <- read_xlsx("D:/1_migration/1_datasets_migrants/fecundidade_brasil/tfr_1940_1980.xlsx")
+tfr_1970_uf <- tfr_1940_1980_uf |>
+  dplyr::select(uf_nascim, tfr_1970)
+```
+
+### junta bases
+```{r junta bases}
+
+data <- merge(df_1980, lfp_1970_uf, by = "uf_nascim")
+data <- merge(data, tfr_1970_uf, by = "uf_nascim")
+
+data <- data |> 
+  filter(age_fem %in% c(30:49))
+```
+
+### separa por estados
+
+```{r separa por estados}
+ufs <- c(51, 12, 35, 50, 42, 14, 13, 41, 28, 33, 43, 15, 17, 53, 52, 22, 31, 26, 24, 32, 21, 11, 29, 23, 25, 16, 27)
+
+# Loop para criar um dataframe para cada UF na lista especificada
+for (estado in ufs) {
+  assign(paste0("data_", estado), data %>% filter(uf == estado))
+}
+```
+
+
+
+### sample characteristics
+```{r sample charact}
+# main sample 
+base <- data|> filter(migrante_casada == 1)
+sum(base$V604)
+```
+
+# Distribuição de escolaridade
+### Homens
+
+```{r dist escolaridade homem}
+
+data_esc <- read_dta("C:/Users/thtak/OneDrive - Fundacao Getulio Vargas - FGV/Tese_Mestrado/1_migration/1_datasets_migrants/censo/2010/censo_2010_migracao_tratada.dta")
+
+table(data_esc$educ_homem)
+
+educ_homem <- data.frame(
+  escolaridade = c(
+    "Creche, pré-escolar", 
+    "Alfabetização de jovens e adultos", 
+    "Antigo primário (elementar)", 
+    "Antigo ginásio (médio 1º ciclo)", 
+    "Ensino fundamental (1º ao 4º ano)", 
+    "Ensino fundamental (5º ano)", 
+    "Ensino fundamental (6º ao 9º ano)", 
+    "Supletivo do fundamental", 
+    "Antigo científico (médio 2º ciclo)", 
+    "Regular ou supletivo do ensino médio ou do 2º grau", 
+    "Superior de graduação", 
+    "Especialização de nível superior", 
+    "Mestrado", 
+    "Doutorado"
+  ),
+  frequencia = c(
+    7878, 10817, 76247, 12083, 108665, 63681, 122056, 14987, 
+    7020, 145575, 50228, 9409, 2803, 1581
+  )
+)
+
+ggplot(educ_homem, aes(x = reorder(escolaridade, frequencia), y = frequencia)) +
+  geom_bar(stat = "identity", fill = "blue", alpha = 0.7) +
+  coord_flip() + 
+  labs(title = "Distribuição de Escolaridade para Homens",
+       x = "Nível de Escolaridade",
+       y = "Frequência") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Mulher
+table(data_esc$educ_mulher)
+
+educ_mulher <- data.frame(
+  escolaridade = c(
+    "Creche, pré-escolar", 
+    "Alfabetização de jovens e adultos", 
+    "Antigo primário (elementar)", 
+    "Antigo ginásio (médio 1º ciclo)", 
+    "Ensino fundamental (1º ao 4º ano)", 
+    "Ensino fundamental (5º ano)", 
+    "Ensino fundamental (6º ao 9º ano)", 
+    "Supletivo do fundamental", 
+    "Antigo científico (médio 2º ciclo)", 
+    "Regular ou supletivo do ensino médio ou do 2º grau", 
+    "Superior de graduação", 
+    "Especialização de nível superior", 
+    "Mestrado", 
+    "Doutorado"
+  ),
+  frequencia = c(
+    1754,  3003, 19554,  2882, 32406, 19708, 44804,  5534,  1449, 63343, 16956,  3962,   467,   122 
+  )
+)
+
+ggplot(educ_mulher, aes(x = reorder(escolaridade, frequencia), y = frequencia)) +
+  geom_bar(stat = "identity", fill = "blue", alpha = 0.7) +
+  coord_flip() + 
+  labs(title = "Distribuição de Escolaridade para Mulheres",
+       x = "Nível de Escolaridade",
+       y = "Frequência") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+```{r horas trabalhadas}
+table(data$v0653)
+```
+
+
+# FE Regressions
+
+## Avaliando o impacto da lfp da UF de origem sobre a probabilidade de ocupação da mulher migrante
+```{r ocup_migrante_15 com dados de 1970}
+work <- feols(ocup_migrante~ lfp_uf_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |V5, data = data, weights = ~V604, cluster = ~uf_nascim)
+summary(work)
+```
+
+
+### Brancas
+```{r ocup_migrante_15_brancas com dados de 1970 }
+data_brancas <- data |> 
+  filter(V509 == 2)
+
+work_white <- feols(ocup_migrante ~ lfp_uf_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp| V5, data = data_brancas, weights = ~V604, cluster = ~uf_nascim)
+summary(work_white)
+```
+
+### Pretas
+```{r reg1_2010_lfp_hworked_pretas}
+data_pretas <- data |> 
+  filter(V509 %in% c(4,8))
+
+work_black <- feols(ocup_migrante ~ lfp_uf_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp|  V5  , data = data_pretas, weights = ~V604, cluster = ~uf_nascim)
+summary(work_black)
+```
+
+## Avaliando o impacto da tfr da UF de origem sobre o número de filhos da mulher migrante
+## Number of children
+
+```{r reg1_2010_tfr_children}
+children <- feols(children ~ tfr_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp  |V5, data = data, weights = ~V604, cluster = ~uf_nascim)
+summary(children)
+```
+
+
+### Brancas
+```{r reg1_2010_tfr_children_brancas}
+children <- feols(children ~ tfr_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem   + age_sp  |V5 , data = data_brancas, weights = ~V604, cluster = ~uf_nascim)
+summary(children)
+```
+
+### Pretas
+
+```{r reg1_2010_tfr_children_pretas 2000}
+children <- feols(children ~ tfr_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp |  V5 , data = data_pretas, weights = ~V604, cluster = ~uf_nascim)
+summary(children)
+```
+
+## Testes de robustez
+
+
+```{r}
+
+```
+
+
+
+Quais são os estados que receberam mais imigrantes e os que mandaram mais pessoas?
+
+```{r emigracao e imigracao}
+top_emigration <- data %>%
+  group_by(uf_nascim) %>%
+  summarise(emigrantes = n()) %>%
+  arrange(desc(emigrantes)) %>%
+  slice_head(n = 5)
+
+top_immigration <- data %>%
+  group_by(uf) %>%
+  summarise(imigrantes = n()) %>%
+  arrange(desc(imigrantes)) %>%
+  slice_head(n = 5)
+```
+
+
+## State: summary statistics
+### 30-49
+```{r summary statistics}
+
+weighted_sd <- function(x, w) {
+  # Calcular a média ponderada
+  wm <- weighted.mean(x, w, na.rm = TRUE)
+  
+  # Calcular a variância ponderada
+  sum_w <- sum(w, na.rm = TRUE)
+  variance <- sum(w * (x - wm)^2, na.rm = TRUE) / sum_w
+  
+  # Retornar o desvio padrão ponderado
+  sqrt(variance)
+}
+
+estatisticas_descritivas_30_49 <- data_30_49 %>%
+  group_by(uf_nascim) %>%
+  summarise(
+    mean_horas_migrante_15 = mean(horas_migrante_15, na.rm = TRUE),
+    sd_horas_migrante_15 = sd(horas_migrante_15, na.rm = TRUE),
+    min_horas_migrante_15 = min(horas_migrante_15, na.rm = TRUE),
+    max_horas_migrante_15 = max(horas_migrante_15, na.rm = TRUE),
+    sd_ocupada_migrante_15_ponderada = weighted_sd(ocup_migrante, P001),
+
+    weighted_sum_ocupada_migrante_15 = sum(ocup_migrante * P001, na.rm = TRUE),
+    total_observacoes_ponderadas = sum(P001, na.rm = TRUE),
+    proporcao_ocupada_migrante_15 = weighted.mean(ocup_migrante, P001, na.rm = TRUE),
+
+    mean_children = mean(children, na.rm = TRUE),
+    sd_children = sd(children, na.rm = TRUE),
+    min_children = min(children, na.rm = TRUE),
+    max_children = max(children, na.rm = TRUE),
+    
+    mean_lfp_uf_30_49_1980 = mean(lfp_uf_30_49_1980, na.rm = TRUE),
+    sd_lfp_uf_30_49_1980 = sd(lfp_uf_30_49_1980, na.rm = TRUE),
+    min_lfp_uf_30_49_1980 = min(lfp_uf_30_49_1980, na.rm = TRUE),
+    max_lfp_uf_30_49_1980 = max(lfp_uf_30_49_1980, na.rm = TRUE),
+    
+    mean_tfr_1980 = mean(tfr_1980, na.rm = TRUE),
+    sd_tfr_1980 = sd(tfr_1980, na.rm = TRUE),
+    min_tfr_1980 = min(tfr_1980, na.rm = TRUE),
+    max_tfr_1980 = max(tfr_1980, na.rm = TRUE)
+  )
+
+```
+### 30-39
+```{r summary statistics}
+estatisticas_descritivas_30_39 <- data_30_39 %>%
+  group_by(uf_nascim) %>%
+  summarise(
+    mean_horas_migrante_15 = mean(horas_migrante_15, na.rm = TRUE),
+    sd_horas_migrante_15 = sd(horas_migrante_15, na.rm = TRUE),
+    min_horas_migrante_15 = min(horas_migrante_15, na.rm = TRUE),
+    max_horas_migrante_15 = max(horas_migrante_15, na.rm = TRUE),
+    
+    weighted_sum_ocupada_migrante_15 = sum(ocup_migrante * P001, na.rm = TRUE),
+    total_observacoes_ponderadas = sum(P001, na.rm = TRUE),
+    proporcao_ocupada_migrante_15 = weighted.mean(ocup_migrante, P001, na.rm = TRUE),
+    sd_ocupada_migrante_15_ponderada = weighted_sd(ocup_migrante, P001),
+
+    mean_children = mean(children, na.rm = TRUE),
+    sd_children = sd(children, na.rm = TRUE),
+    min_children = min(children, na.rm = TRUE),
+    max_children = max(children, na.rm = TRUE),
+    
+    mean_lfp_uf_30_39_1980 = mean(lfp_uf_30_39_1980, na.rm = TRUE),
+    sd_lfp_uf_30_39_1980 = sd(lfp_uf_30_39_1980, na.rm = TRUE),
+    min_lfp_uf_30_39_1980 = min(lfp_uf_30_39_1980, na.rm = TRUE),
+    max_lfp_uf_30_39_1980 = max(lfp_uf_30_39_1980, na.rm = TRUE),
+    
+    mean_tfr_1980 = mean(tfr_1980, na.rm = TRUE),
+    sd_tfr_1980 = sd(tfr_1980, na.rm = TRUE),
+    min_tfr_1980 = min(tfr_1980, na.rm = TRUE),
+    max_tfr_1980 = max(tfr_1980, na.rm = TRUE)
+  )
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r image}
+setwd("D:/2_scripts_migration")
+save.image("1991_1970_new.RData")
+```
+

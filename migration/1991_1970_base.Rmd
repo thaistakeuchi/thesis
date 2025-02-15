@@ -1,0 +1,315 @@
+---
+title: "Análise 1991: usando dados de lfp + tfr de 1970"
+author: "Thais Takeuchi"
+date: "2024-10-19"
+output: html_document
+---
+
+## Load packages
+```{r load, message=FALSE, warning=FALSE, include=FALSE}
+#######################
+# PREPARE ENVIRONMENT
+#######################
+
+rm(list = ls())
+
+load.lib <- c("data.table","foreign","stargazer","devtools","stringi", "srvyr", "survey","tidyverse","gtools", "remote","installr","microdadosBrasil","ggplot2","viridis","hrbrthemes","WDI","dplyr", "arrow", "readxl","rio","writexl","dineq", "basedosdados", "httr", "haven", "openxlsx", "fixest", "readxl")
+
+install.lib <- load.lib[!load.lib %in% installed.packages()]
+for(lib in install.lib) install.packages(lib,dependencies=TRUE)
+sapply(load.lib, require, character=TRUE)
+```
+
+## CENSO
+```{r census}
+data <- read_dta("D:/censo_1991/tratada/censo_1991_migracao_tratada.dta")
+
+setDT(data)
+
+# work
+data$salary <- ifelse(
+  data$V0356 != 9999999,
+  data$V3561,
+  NA
+)
+semanas_por_mes <- 4.33
+data$horas_trabalhadas_mes <- data$V0354 * semanas_por_mes
+data$ganhos_horarios <- data$salary / data$horas_trabalhadas_mes
+data$ganhos_horarios[data$ganhos_horarios <= 0] <- NA
+data$log_ganhos_horarios <- log(data$ganhos_horarios)
+
+data$ocupada_migrante_15 <- ifelse(data$V0345 %in% c(1, 2) & data$migrante_casada_15 == 1, 1, 0)
+data$id_dom <- data$IDQues
+
+# Função que retorna NA quando todos os valores são NA, ao invés de -Inf
+max_with_na <- function(x) {
+  if (all(is.na(x))) {
+    return(NA)
+  } else {
+    return(max(x, na.rm = TRUE))
+  }
+}
+
+# unindo valores maximos no domicilio
+data$max_age_sp <- ave(data$age_sp, data$id_dom, FUN = max_with_na)
+data$max_fund_homem <- ave(data$fund_homem, data$id_dom, FUN = max_with_na)
+data$max_em_homem <- ave(data$em_homem, data$id_dom, FUN = max_with_na)
+data$max_superior_homem <- ave(data$superior_homem, data$id_dom, FUN = max_with_na)
+data$max_educ_homem <- ave(data$educ_homem, data$id_dom, FUN = max_with_na)
+data$max_income_sp <- ave(data$income_sp, data$id_dom, FUN = max_with_na)
+data$max_income_sp_raw <- ave(data$income_sp_raw, data$id_dom, FUN = max_with_na)
+
+data$age_sp[data$migrante_casada_15 == 1] <- data$max_age_sp[data$migrante_casada_15 == 1]
+data$fund_homem[data$migrante_casada_15 == 1] <- data$max_fund_homem[data$migrante_casada_15 == 1]
+data$em_homem[data$migrante_casada_15 == 1] <- data$max_em_homem[data$migrante_casada_15 == 1]
+data$superior_homem[data$migrante_casada_15 == 1] <- data$max_superior_homem[data$migrante_casada_15 == 1]
+data$educ_homem[data$migrante_casada_15 == 1] <- data$max_educ_homem[data$migrante_casada_15 == 1]
+data$income_sp[data$migrante_casada_15 == 1] <- data$max_income_sp[data$migrante_casada_15 == 1]
+data$income_sp_raw[data$migrante_casada_15 == 1] <- data$max_income_sp_raw[data$migrante_casada_15 == 1]
+
+arrow::write_parquet(data,
+  "D:/1_migration/1_datasets_migrants/censo/1991/censo_1991_migracao_tratada_migrante_15.parquet")
+
+# deixa somente linhas onde migrante_casada_15 == 1
+dt_filtrado <- data[data$migrante_casada_15 == 1, ]
+
+arrow::write_parquet(dt_filtrado, "D:/1_migration/1_datasets_migrants/censo/1991/censo_1991_migracao_tratada_migrante_15_final.parquet")
+
+
+
+dt <- head(data, 100000)
+
+dt_1991 <- data[, c("migrante_casada_15", "ocupada_migrante_15", "fund_mulher", "em_mulher", 
+                               "superior_mulher", "fund_homem", "em_homem", 
+                               "superior_homem", "income_sp_raw", "age_fem", "age_squared_fem", 
+                               "age_sp", "V1102", "V7301", "uf_nascim", "children")]
+
+```
+
+## LFP
+```{r pnad}
+lfp_1970_uf <- read_xlsx("D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_1970.xlsx")
+```
+
+## TFR
+```{r tfr}
+tfr_1940_1980_uf <- read_xlsx("D:/1_migration/1_datasets_migrants/fecundidade_brasil/tfr_1940_1980.xlsx")
+tfr_1970_uf <- tfr_1940_1980_uf |>
+  dplyr::select(uf_nascim, tfr_1970)
+```
+
+### junta bases
+```{r junta bases}
+
+dt_1991 <- merge(dt_filtrado, lfp_1970_uf, by = "uf_nascim")
+dt_1991 <- merge(dt_1991, tfr_1970_uf, by = "uf_nascim")
+
+dt_1991 <- dt_1991 |> 
+  filter(age_fem %in% c(30:49))
+
+data <- merge(data, lfp_1970_uf, by = "uf_nascim")
+data <- merge(data, tfr_1970_uf, by = "uf_nascim")
+```
+
+### separa por estados
+
+```{r separa por estados}
+ufs <- c(51, 12, 35, 50, 42, 14, 13, 41, 28, 33, 43, 15, 17, 53, 52, 22, 31, 26, 24, 32, 21, 11, 29, 23, 25, 16, 27)
+
+# Loop para criar um dataframe para cada UF na lista especificada
+for (estado in ufs) {
+  assign(paste0("data_", estado), data %>% filter(uf == estado))
+}
+```
+
+
+
+### sample characteristics
+```{r sample charact}
+# main sample 
+base <- data|> filter(migrante_casada_15 == 1)
+sum(base$V7301)
+```
+
+# Distribuição de escolaridade
+### Homens
+
+```{r dist escolaridade homem}
+
+data_esc <- read_dta("C:/Users/thtak/OneDrive - Fundacao Getulio Vargas - FGV/Tese_Mestrado/1_migration/1_datasets_migrants/censo/2010/censo_2010_migracao_tratada.dta")
+
+table(data_esc$educ_homem)
+
+educ_homem <- data.frame(
+  escolaridade = c(
+    "Creche, pré-escolar", 
+    "Alfabetização de jovens e adultos", 
+    "Antigo primário (elementar)", 
+    "Antigo ginásio (médio 1º ciclo)", 
+    "Ensino fundamental (1º ao 4º ano)", 
+    "Ensino fundamental (5º ano)", 
+    "Ensino fundamental (6º ao 9º ano)", 
+    "Supletivo do fundamental", 
+    "Antigo científico (médio 2º ciclo)", 
+    "Regular ou supletivo do ensino médio ou do 2º grau", 
+    "Superior de graduação", 
+    "Especialização de nível superior", 
+    "Mestrado", 
+    "Doutorado"
+  ),
+  frequencia = c(
+    7878, 10817, 76247, 12083, 108665, 63681, 122056, 14987, 
+    7020, 145575, 50228, 9409, 2803, 1581
+  )
+)
+
+ggplot(educ_homem, aes(x = reorder(escolaridade, frequencia), y = frequencia)) +
+  geom_bar(stat = "identity", fill = "blue", alpha = 0.7) +
+  coord_flip() + 
+  labs(title = "Distribuição de Escolaridade para Homens",
+       x = "Nível de Escolaridade",
+       y = "Frequência") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Mulher
+table(data_esc$educ_mulher)
+
+educ_mulher <- data.frame(
+  escolaridade = c(
+    "Creche, pré-escolar", 
+    "Alfabetização de jovens e adultos", 
+    "Antigo primário (elementar)", 
+    "Antigo ginásio (médio 1º ciclo)", 
+    "Ensino fundamental (1º ao 4º ano)", 
+    "Ensino fundamental (5º ano)", 
+    "Ensino fundamental (6º ao 9º ano)", 
+    "Supletivo do fundamental", 
+    "Antigo científico (médio 2º ciclo)", 
+    "Regular ou supletivo do ensino médio ou do 2º grau", 
+    "Superior de graduação", 
+    "Especialização de nível superior", 
+    "Mestrado", 
+    "Doutorado"
+  ),
+  frequencia = c(
+    1754,  3003, 19554,  2882, 32406, 19708, 44804,  5534,  1449, 63343, 16956,  3962,   467,   122 
+  )
+)
+
+ggplot(educ_mulher, aes(x = reorder(escolaridade, frequencia), y = frequencia)) +
+  geom_bar(stat = "identity", fill = "blue", alpha = 0.7) +
+  coord_flip() + 
+  labs(title = "Distribuição de Escolaridade para Mulheres",
+       x = "Nível de Escolaridade",
+       y = "Frequência") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+```{r horas trabalhadas}
+table(data$v0653)
+```
+
+
+Quais são os estados que receberam mais imigrantes e os que mandaram mais pessoas?
+
+```{r emigracao e imigracao}
+top_emigration <- data %>%
+  group_by(uf_nascim) %>%
+  summarise(emigrantes = n()) %>%
+  arrange(desc(emigrantes)) %>%
+  slice_head(n = 5)
+
+top_immigration <- data %>%
+  group_by(uf) %>%
+  summarise(imigrantes = n()) %>%
+  arrange(desc(imigrantes)) %>%
+  slice_head(n = 5)
+```
+
+
+## State: summary statistics
+### 30-49
+```{r summary statistics}
+
+weighted_sd <- function(x, w) {
+  # Calcular a média ponderada
+  wm <- weighted.mean(x, w, na.rm = TRUE)
+  
+  # Calcular a variância ponderada
+  sum_w <- sum(w, na.rm = TRUE)
+  variance <- sum(w * (x - wm)^2, na.rm = TRUE) / sum_w
+  
+  # Retornar o desvio padrão ponderado
+  sqrt(variance)
+}
+
+estatisticas_descritivas_30_49 <- data_30_49 %>%
+  group_by(uf_nascim) %>%
+  summarise(
+    mean_horas_migrante_15 = mean(horas_migrante_15, na.rm = TRUE),
+    sd_horas_migrante_15 = sd(horas_migrante_15, na.rm = TRUE),
+    min_horas_migrante_15 = min(horas_migrante_15, na.rm = TRUE),
+    max_horas_migrante_15 = max(horas_migrante_15, na.rm = TRUE),
+    sd_ocupada_migrante_15_ponderada = weighted_sd(ocupada_migrante_15, P001),
+
+    weighted_sum_ocupada_migrante_15 = sum(ocupada_migrante_15 * P001, na.rm = TRUE),
+    total_observacoes_ponderadas = sum(P001, na.rm = TRUE),
+    proporcao_ocupada_migrante_15 = weighted.mean(ocupada_migrante_15, P001, na.rm = TRUE),
+
+    mean_children = mean(children, na.rm = TRUE),
+    sd_children = sd(children, na.rm = TRUE),
+    min_children = min(children, na.rm = TRUE),
+    max_children = max(children, na.rm = TRUE),
+    
+    mean_lfp_uf_30_49_1980 = mean(lfp_uf_30_49_1980, na.rm = TRUE),
+    sd_lfp_uf_30_49_1980 = sd(lfp_uf_30_49_1980, na.rm = TRUE),
+    min_lfp_uf_30_49_1980 = min(lfp_uf_30_49_1980, na.rm = TRUE),
+    max_lfp_uf_30_49_1980 = max(lfp_uf_30_49_1980, na.rm = TRUE),
+    
+    mean_tfr_1980 = mean(tfr_1980, na.rm = TRUE),
+    sd_tfr_1980 = sd(tfr_1980, na.rm = TRUE),
+    min_tfr_1980 = min(tfr_1980, na.rm = TRUE),
+    max_tfr_1980 = max(tfr_1980, na.rm = TRUE)
+  )
+
+```
+### 30-39
+```{r summary statistics}
+estatisticas_descritivas_30_39 <- data_30_39 %>%
+  group_by(uf_nascim) %>%
+  summarise(
+    mean_horas_migrante_15 = mean(horas_migrante_15, na.rm = TRUE),
+    sd_horas_migrante_15 = sd(horas_migrante_15, na.rm = TRUE),
+    min_horas_migrante_15 = min(horas_migrante_15, na.rm = TRUE),
+    max_horas_migrante_15 = max(horas_migrante_15, na.rm = TRUE),
+    
+    weighted_sum_ocupada_migrante_15 = sum(ocupada_migrante_15 * P001, na.rm = TRUE),
+    total_observacoes_ponderadas = sum(P001, na.rm = TRUE),
+    proporcao_ocupada_migrante_15 = weighted.mean(ocupada_migrante_15, P001, na.rm = TRUE),
+    sd_ocupada_migrante_15_ponderada = weighted_sd(ocupada_migrante_15, P001),
+
+    mean_children = mean(children, na.rm = TRUE),
+    sd_children = sd(children, na.rm = TRUE),
+    min_children = min(children, na.rm = TRUE),
+    max_children = max(children, na.rm = TRUE),
+    
+    mean_lfp_uf_30_39_1980 = mean(lfp_uf_30_39_1980, na.rm = TRUE),
+    sd_lfp_uf_30_39_1980 = sd(lfp_uf_30_39_1980, na.rm = TRUE),
+    min_lfp_uf_30_39_1980 = min(lfp_uf_30_39_1980, na.rm = TRUE),
+    max_lfp_uf_30_39_1980 = max(lfp_uf_30_39_1980, na.rm = TRUE),
+    
+    mean_tfr_1980 = mean(tfr_1980, na.rm = TRUE),
+    sd_tfr_1980 = sd(tfr_1980, na.rm = TRUE),
+    min_tfr_1980 = min(tfr_1980, na.rm = TRUE),
+    max_tfr_1980 = max(tfr_1980, na.rm = TRUE)
+  )
+
+```
+
+```{r image}
+setwd("D:/2_scripts_migration")
+save.image("1991_1970_new.RData")
+```
+

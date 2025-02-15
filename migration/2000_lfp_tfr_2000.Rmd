@@ -1,0 +1,375 @@
+---
+title: "Análise 2000: usando dados de lfp + tfr de 2000"
+author: "Thais Takeuchi"
+date: "2024-09-17"
+output: html_document
+---
+## Load packages
+```{r load, include = FALSE, message = FALSE, warning=FALSE}
+#######################
+# PREPARE ENVIRONMENT
+#######################
+
+rm(list = ls())
+
+load.lib <- c("data.table","foreign","stargazer","devtools","stringi", "srvyr", "survey","tidyverse","gtools", "remote","installr","microdadosBrasil","ggplot2","viridis","hrbrthemes","WDI","dplyr", "arrow", "readxl","rio","writexl","dineq", "basedosdados", "httr", "haven", "openxlsx", "fixest", "readxl")
+
+install.lib <- load.lib[!load.lib %in% installed.packages()]
+for(lib in install.lib) install.packages(lib,dependencies=TRUE)
+sapply(load.lib, require, character=TRUE)
+```
+
+## CENSUS
+```{r census}
+# data <- read_dta("E:/Thais/Tese_Mestrado/1_migration/1_datasets_migrants/censo/2000/censo_pessoas_2000_migracao.dta")
+
+# write parquet
+# write_parquet(data, "E:/Thais/Tese_Mestrado/1_migration/1_datasets_migrants/censo/2000/censo_pessoas_2000_migracao.parquet")
+
+data <- read_parquet("C:/Users/thtak/OneDrive - Fundacao Getulio Vargas - FGV/Tese_Mestrado/1_migration/1_datasets_migrants/censo/2000/censo_pessoas_2000_migracao.parquet")
+```
+
+## LFP (labor force productivity)
+#### 2000
+
+```{r lfp}
+#https://www.ibge.gov.br/apps/snig/v1/?loc=0,24,12,27,16,13,29,23,53,32,52,21,51,50,31,15,25,41,26,22,43,33,11,14,42,35,28,17&cat=-1,-2,-3,129&ind=4727
+
+# lfp <- read.csv("E:/Thais/Tese_Mestrado/1_migration/1_datasets_migrants/lfp/lfp_2000.csv", sep = ";")
+# lfp_2000 <- lfp |> 
+#   dplyr::rename(lfp_uf = "Divisões.Territoriais") |> 
+#   dplyr::rename(lfp_ano = "Cod..Loc.") |> 
+#   dplyr::rename(lfp_total = "X2000")
+
+lfp_2000_sample <- read.csv("C:/Users/thtak/OneDrive - Fundacao Getulio Vargas - FGV/Tese_Mestrado/1_migration/1_datasets_migrants/lfp/lfp_2000_2010.csv", sep = ";")
+
+names(lfp_2000_sample) <- c(
+  "uf_nascim",
+  "nome_uf",
+  "30_49_2000",
+  "Men_30_49_2000",
+  "Women_30_49_2000",
+  "White_30_49_2000",
+  "Men_White_30_49_2000",
+  "Women_White_30_49_2000",
+  "Black_or_Pardo_30_49_2000",
+  "Men_Black_or_Pardo_30_49_2000",
+  "Women_Black_or_Pardo_30_49_2000"
+)
+
+lfp_2000_sample <- lfp_2000_sample |>
+  filter(uf_nascim != 0) |> 
+  mutate(across(where(is.character) & !matches("nome_uf"), ~ as.numeric(gsub(",", ".", .))))
+```
+
+## Taxa fecundidade
+#### tx fec 2000
+
+```{r tx fec 2000}
+#http://tabnet.datasus.gov.br/cgi/idb2012/a05b.htm
+
+tfr <- read.csv("C:/Users/thtak/OneDrive - Fundacao Getulio Vargas - FGV/Tese_Mestrado/1_migration/1_datasets_migrants/fecundidade_brasil/fec_1991_2011.csv", sep = ";", header = TRUE)
+
+setDT(tfr)
+
+data_tfr <- tfr |> 
+  filter(!row_number() %in% c(1,2))
+
+colnames(data_tfr) <- as.character(data_tfr[1,])
+data_tfr <- data_tfr[-1, ]
+colnames(data_tfr) <- iconv(colnames(data_tfr), from = "latin1", to = "UTF-8")
+data_tfr$`Região e UF` <- iconv(data_tfr$`Região e UF`, from = "latin1", to = "UTF-8")
+
+data_tfr <- data_tfr |>
+  dplyr::select(-starts_with("Obs")) |> 
+  filter(!row_number() %in% c(34:44))
+
+uf_codes <- c("Rondônia" = 11, "Acre" = 12, "Amazonas" = 13, 
+              "Roraima" = 14, "Pará" = 15, "Amapá" = 16, 
+              "Tocantins" = 17, "Maranhão" = 21, "Piauí" = 22, 
+              "Ceará" = 23, "Rio Grande do Norte" = 24, "Paraíba" = 25, 
+              "Pernambuco" = 26, "Alagoas" = 27, "Sergipe" = 28, 
+              "Bahia" = 29, "Minas Gerais" = 31, "Espírito Santo" = 32, 
+              "Rio de Janeiro" = 33, "São Paulo" = 35, "Paraná" = 41, 
+              "Santa Catarina" = 42, "Rio Grande do Sul" = 43, 
+              "Mato Grosso do Sul" = 50, "Mato Grosso" = 51, 
+              "Goiás" = 52, "Distrito Federal" = 53)
+
+# Substituir os nomes das UFs pelos códigos numéricos
+data_tfr$`Região e UF` <- recode(data_tfr$`Região e UF`, !!!uf_codes)
+# data_tfr <- as.numeric(colnames(data_tfr)) 
+
+data_tfr <- data_tfr  |> 
+  filter(!is.na(data_tfr$`Região e UF`)) |> 
+  rename(uf_nascim = `Região e UF`) |> 
+  rename_with(~paste0(., "_tfr"), -uf_nascim)
+
+data_tfr_1991 <- data_tfr[, c("uf_nascim", "1991_tfr")]
+data_tfr_2000 <- data_tfr[, c("uf_nascim", "2000_tfr")]
+
+# https://educa.ibge.gov.br/professores/educa-atividades/17658-fecundidade-no-brasil-1940-a-2010.html
+
+```
+
+### Renomeia variveis censo
+
+```{r uf nascimento, warning=FALSE}
+code_mapping <- c(
+  "901" = 11, "902" = 12, "903" = 13, "904" = 14, "905" = 15, 
+  "906" = 16, "907" = 17, "908" = 21, "909" = 22, "910" = 23,
+  "911" = 24, "912" = 25, "913" = 26, "914" = 27, "915" = 28, 
+  "916" = 29, "917" = 31, "918" = 32, "919" = 33, "920" = 35, 
+  "921" = 41, "922" = 42, "923" = 43, "924" = 50, "925" = 51, 
+  "926" = 52, "927" = 53
+)
+
+data_1 <- data |>
+  mutate(
+    uf_nascim = v4219,
+    uf_nascim = recode(as.character(as.integer(v4219)), !!!code_mapping, .default = NA_real_)
+  ) |>
+  filter(uf_nascim %in% code_mapping)
+
+setDT(data_1)
+```
+
+
+### Filtra dados
+```{r identifica domicilio por meio da escolaridade}
+escolaridade_homem <- data_1[v0401 == 1 & v0402 %in% c(1, 2), .(v0300, escolaridade_homem = v0432)]
+escolaridade_mulher <- data_1[v0401 == 2 & v0402 %in% c(1, 2), .(v0300, escolaridade_mulher = v0432)]
+
+escolaridade_homem_mulher <- merge(escolaridade_homem, escolaridade_mulher, by = "v0300", all = TRUE)
+
+rm(escolaridade_homem, escolaridade_mulher)
+
+data_m <- merge(escolaridade_homem_mulher, data_1, by = "v0300", all = TRUE)
+```
+
+### Create variables
+```{r var1}
+data_m1 <- data_m |>
+  mutate(
+    ano_nasc = ano - v4752, #ano-idade
+    rm = ifelse(v1004 != 28, 1, 0), #metropolitan region
+    migrant = ifelse(((v4752 - v0623 <= 15)), 1, 0), #idade-anos que mora neste Estado
+
+    married = ifelse((migrant == 1 & v0438 == 1), 1, 0),
+
+    # idade
+    age_fem = if_else(v0401 == 2, v4752, NA_real_),
+    age_squared = v4752^2,
+    age_sp = ifelse(v0402 == 2, v4752, NA_real_),
+    
+    # sao casados?
+    couple_married = ifelse(!is.na(escolaridade_homem) & !is.na(escolaridade_mulher) & married == 1, 1, 0),
+    
+    fem_married = ifelse((migrant == 1 & married == 1 & v0401 == 2), 1, 0), 
+
+    men_married = ifelse((migrant == 1 & married == 1 & v0401 == 1), 1, 0),
+    
+    # educacao casal
+    # alf = ifelse(migrant == 1 & (v0428 == 1), 1, 0), 
+    
+    fund_mulher = ifelse(!is.na(escolaridade_mulher) & migrant == 1 & 
+                                   (escolaridade_mulher == 5 | escolaridade_mulher == 3), 1, 0), 
+    fund_homem = ifelse(!is.na(escolaridade_homem) & migrant == 1 &
+                                 (escolaridade_homem == 5 | escolaridade_homem == 3), 1, 0),
+
+    em_mulher = ifelse(!is.na(escolaridade_mulher) & migrant == 1 & 
+                                   (escolaridade_mulher == 6 | escolaridade_mulher == 4), 1, 0), 
+    em_homem = ifelse(!is.na(escolaridade_homem) & migrant == 1 &
+                                 (escolaridade_homem == 6| escolaridade_homem == 4), 1, 0),
+
+    superior_mulher = ifelse(!is.na(escolaridade_mulher) & migrant == 1 & 
+                                   (escolaridade_mulher == 7| escolaridade_mulher == 8), 1, 0), 
+    superior_homem = ifelse(!is.na(escolaridade_homem) & migrant == 1 &
+                                 (escolaridade_homem == 7 | escolaridade_homem == 8), 1, 0),
+
+    ocup = ifelse((migrant == 1 & v0439 == 1), 1, 0),
+    ocup_fem = ifelse((!is.na(escolaridade_mulher) & ocup == 1 & v0401 == 2), 1,0),
+    ocup_men= ifelse((!is.na(escolaridade_homem) & ocup == 1 & v0401 == 1), 1,0),
+
+    main_sample = ifelse(couple_married == 1 & (age_fem %in% c(30,50)), 1, 0),
+    children = ifelse(main_sample == 1, v4620, NA),
+    children_under_5  = ifelse(main_sample == 1 & v4654 <= 5, 1, 0),
+    children_under_18  = ifelse(main_sample == 1 & v4654 <= 18, 1, 0),
+    hworked_fem = ifelse((main_sample == 1 & v0401 == 2), v0453, NA),
+
+  # ) |>
+  # filter(!is.na(main_sample) & !is.na(children) & !is.na(hworked_fem) & !is.na(children_under_5) & !is.na(fund_completo) & !is.na(superior_completo) & !is.na(em_completo) & !is.na(v1004)
+    )
+
+```
+
+#### age spouse
+```{r age spouse}
+# age spouse ----
+# Calcula o valor mínimo e máximo da idade
+min_age <- min(data_m1$age_sp, na.rm = TRUE)
+max_age <- max(data_m1$age_sp, na.rm = TRUE)
+
+# Cria a variável age_sp_range inicialmente com NA
+data_m1$age_sp_range <- NA
+
+# Cria os intervalos de idade
+for (i in 1:10) {
+  j <- i + 1
+  # Calcula os limites dos intervalos proporcionalmente ao intervalo total
+  lower_bound <- (i - 1) * ((max_age - min_age) / 10) + min_age
+  upper_bound <- i * ((max_age - min_age) / 10) + min_age
+  
+  # Substitui age_sp_range com base nos limites de idade
+  data_m1$age_sp_range <- ifelse(data_m1$age_sp >= lower_bound & data_m1$age_sp < upper_bound, i, data_m1$age_sp_range)
+}
+
+# Ajusta o valor para casos onde a idade é 100 (ou o máximo que você desejar definir manualmente)
+data_m1$age_sp_range <- ifelse(data_m1$age_sp == 100, 10, data_m1$age_sp_range)
+
+```
+
+
+### income spouse
+```{r income spouse}
+data_m2 <- data_m1 |> 
+  mutate(
+    income_sp = ifelse(v0402 == 2, (12*(v4525))/10000, NA_real_)
+  )
+```
+
+### graph: income all jobs
+```{r graph income all jobs, warning=FALSE}
+# Carregar o pacote ggplot2
+library(ggplot2)
+
+# Contar a frequência dos valores de v4525
+salario_freq <- as.data.frame(table(data_m1$v4525))
+colnames(salario_freq) <- c("v4525", "Frequencia")
+
+# Converter a coluna v4525 para numérica
+salario_freq$v4525 <- as.numeric(as.character(salario_freq$v4525))
+
+# Criar o gráfico de barras
+ggplot(salario_freq, aes(x = v4525, y = Frequencia)) +
+  geom_bar(stat = "identity", fill = "blue", alpha = 0.7) +
+  labs(x = "Valores de v4525", y = "Frequência", title = "Distribuição da Variável v4525") +
+  theme_minimal() +
+  xlim(0, 1000) +  # Limitando o eixo x para os primeiros 100 valores
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+### sample characteristics
+```{r}
+# main sample 
+base <- data_m2|> filter(main_sample == 1)
+sum(base$P001)
+```
+
+```{r children under 5 weightened}
+# children under 5
+children_under_5_sample <- data_m2 |> filter(children_under_5 == 1)
+sum(children_under_5_sample$P001)
+```
+
+### merge data
+```{r merge census with lfp}
+data_m3 <- merge(base, lfp_2000_sample, by = "uf_nascim", all.x = TRUE)
+
+data_m3 <- data_m3 |>
+  mutate(
+    hworked_fem_mid = case_when(
+      hworked_fem == 0 ~ 0,
+      hworked_fem %in% c(1:10) ~ 5,
+      hworked_fem %in% c(12:20) ~ 20,
+      hworked_fem %in% c(21:30) ~ 30,
+      hworked_fem %in% c(31:40) ~ 40,
+      hworked_fem %in% c(41:44) ~ 44,
+      hworked_fem %in% c(45:48) ~ 48,
+      hworked_fem %in% c(49:50) ~ 50,
+      hworked_fem %in% c(51:70) ~ 60,
+      hworked_fem > 70 ~ 80,
+      TRUE ~ NA_real_
+    )
+  #   )|>
+  # filter(!is.na(hworked_fem_mid)
+    )
+data_m3 <- merge(data_m3, data_tfr_2000, by = "uf_nascim")
+```
+
+
+### Tempo de moradia na cidade natal antes de se mudar para o Estado da pesquisa (tirando NA)
+- 5 anos: 595 observações
+- 10 anos: 1096 observações
+- 15 anos: 1597 observações (10689 quando não tiro NA)
+
+
+## FE Regressions
+
+#### Usando lfp+tfr de 2000
+```{r reg1_2000}
+model1_nc <- feols(hworked_fem ~ Women_30_49_2000 + fund_mulher + em_mulher + superior_mulher| v0102 + factor(v4752) + age_squared + v1004, data = data_m3, weights = ~P001, cluster = ~uf_nascim)
+summary(model1_nc)
+```
+
+### Brancas
+```{r reg1_2000 brancas}
+data_brancas <- data_m3 |> 
+  filter(v0408 == 1)
+
+model1_brancas <- feols(hworked_fem_mid ~ Women_White_30_49_2000 + fund_mulher + em_mulher + superior_mulher| v0102 + factor(v4752) + age_squared + v1004, data = data_brancas, weights = ~P001, cluster = ~uf_nascim)
+summary(model1_brancas)
+```
+
+### Pretas
+```{r reg1_2000 preta parda}
+data_preta <- data_m3 |> 
+  filter(v0408 == 2)
+
+model1_preta <- feols(hworked_fem_mid ~ Women_Black_or_Pardo_30_49_2000 + fund_mulher + em_mulher + superior_mulher| v0102 + factor(v4752) + age_squared + v1004, data = data_preta, weights = ~P001, cluster = ~uf_nascim)
+summary(model1_preta)
+```
+
+## Hours worked
+#### + spouse's education and income + child < 5
+```{r reg1_2000 +sp_edu_income}
+model1_sp_edu_income <- feols(hworked_fem ~ Women_30_49_2000 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + age_sp_range + income_sp + children_under_5| v0102 + factor(v4752) + age_squared + v1004, data = data_m3, weights = ~P001, cluster = ~uf_nascim)
+summary(model1_sp_edu_income)
+```
+
+
+## Number of children
+```{r reg1_2000 +sp_edu_income children}
+model1_sp_edu_income <- feols(children ~ Women_30_49_2000 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + age_sp_range + income_sp + children_under_5| v0102 + factor(v4752) + age_squared + v1004, data = data_m3, weights = ~P001, cluster = ~uf_nascim)
+summary(model1_sp_edu_income)
+```
+
+### Brancas
+```{r reg1_2000 brancas +sp_edu_income}
+model1_brancas_sp_edu_income <- feols(hworked_fem_mid ~ Women_White_30_49_2000 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + age_sp_range + income_sp + children_under_5| v0102 + factor(v4752) + age_squared + v1004, data = data_brancas, weights = ~P001, cluster = ~uf_nascim)
+summary(model1_brancas_sp_edu_income)
+```
+
+## Number of children - Brancas
+```{r reg1_2000 brancas +sp_edu_income children}
+model1_sp_edu_income <- feols(children ~ Women_White_30_49_2000 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + age_sp_range + income_sp + children_under_5| v0102 + factor(v4752) + age_squared + v1004, data = data_m3, weights = ~P001, cluster = ~uf_nascim)
+summary(model1_sp_edu_income)
+```
+
+### Pretas
+```{r reg1_2000 preta parda +sp_edu_income}
+model1_preta_sp_edu_income <- feols(hworked_fem_mid ~ Women_Black_or_Pardo_30_49_2000 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + age_sp_range + income_sp + children_under_5| v0102 + factor(v4752) + age_squared + v1004, data = data_preta, weights = ~P001, cluster = ~uf_nascim)
+summary(model1_preta_sp_edu_income)
+```
+## Number of children - Brancas
+```{r reg1_2000 pretas +sp_edu_income children}
+model1_sp_edu_income <- feols(children ~ Women_Black_or_Pardo_30_49_2000 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + age_sp_range + income_sp + children_under_5| v0102 + factor(v4752) + age_squared + v1004, data = data_m3, weights = ~P001, cluster = ~uf_nascim)
+summary(model1_sp_edu_income)
+```
+```{r image}
+setwd("C:/Users/thtak/OneDrive - Fundacao Getulio Vargas - FGV/Tese_Mestrado/1_migration/2_scripts_migration")
+load("2000.RData")
+
+
+```
+

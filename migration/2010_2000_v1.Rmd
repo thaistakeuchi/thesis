@@ -1,0 +1,184 @@
+---
+title: "Análise 2010: usando dados de lfp + tfr de 2000"
+author: "Thais Takeuchi"
+date: "2024-10-04"
+output: html_document
+---
+## Load packages
+```{r load, message=FALSE, warning=FALSE, include=FALSE}
+#######################
+# PREPARE ENVIRONMENT
+#######################
+
+rm(list = ls())
+
+load.lib <- c("data.table","foreign","stargazer","devtools","stringi", "srvyr", "survey","tidyverse","gtools", "remote","installr","microdadosBrasil","ggplot2","viridis","hrbrthemes","WDI","dplyr", "arrow", "readxl","rio","writexl","dineq", "basedosdados", "httr", "haven", "openxlsx", "fixest", "readxl")
+
+install.lib <- load.lib[!load.lib %in% installed.packages()]
+for(lib in install.lib) install.packages(lib,dependencies=TRUE)
+sapply(load.lib, require, character=TRUE)
+```
+
+## CENSUS
+```{r census}
+data <- read_dta("C:/Users/thtak/OneDrive - Fundacao Getulio Vargas - FGV/Tese_Mestrado/1_migration/1_datasets_migrants/censo/2010/censo_2010_migracao_tratada_migrante_15_final.dta")
+#copy_data <- copy(data)
+```
+
+## LFP (labor force productivity)
+#### 2000
+
+```{r lfp}
+lfp_2000 <- read_xlsx("C:/Users/thtak/OneDrive - Fundacao Getulio Vargas - FGV/Tese_Mestrado/1_migration/1_datasets_migrants/lfp/lfp_2000_sample.xlsx")
+```
+
+## Taxa fecundidade
+#### tx fec 2000
+
+```{r tx fec 2000}
+tfr_2000 <- read_xlsx("C:/Users/thtak/OneDrive - Fundacao Getulio Vargas - FGV/Tese_Mestrado/1_migration/1_datasets_migrants/fecundidade_brasil/tfr_2000.xlsx")
+
+tfr_2000 <- tfr_2000 |> 
+  rename(tfr = '2000_tfr') |> 
+  mutate(tfr = as.numeric(gsub(",", ".", tfr)))
+setDT(tfr_2000)
+```
+
+### merge data
+```{r merge census with lfp + tfr}
+data <- merge(data, tfr_2000, by = "uf_nascim")
+data <- merge(data, lfp_2000, by = "uf_nascim")
+
+# filtra mulheres entre 30-49 anos
+data <- data |> 
+  filter(uf_nascim != 99 & uf_nascim != 88) |> 
+  filter(!(migrante_casada == 1 & !(v6036 %in% 30:49))) |> 
+  mutate(children = v0663)
+```
+
+```{r horas trabalhadas}
+data <- data |>
+  mutate(
+    hworked_fem_mid = case_when(
+      hworked_fem == 0 ~ 0,
+      hworked_fem %in% c(1:10) ~ 8,
+      hworked_fem %in% c(11:20) ~ 20,
+      hworked_fem %in% c(21:30) ~ 30,
+      hworked_fem %in% c(31:40) ~ 40,
+      hworked_fem %in% c(41:48) ~ 46,
+      hworked_fem %in% c(49:50) ~ 50,
+      hworked_fem > 70 ~ 60,
+      TRUE ~ NA_real_
+    )
+    )
+```
+
+### sample characteristics
+```{r}
+# main sample 
+base <- data|> filter(main_sample == 1)
+sum(base$v0010)
+```
+
+# FE Regressions
+
+## Avaliando o impacto da lfp.y da UF de origem sobre as horas trabalhadas da mulher migrante
+### Total
+```{r reg1_2010_lfp_hworked }
+model1_sp_edu_income <- feols(hworked_fem_mid ~ Women_30_49_2000 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp + children_under_5| factor(age_fem) + age_squared_fem + v1004 + factor(age_fem) + age_squared_fem + age_sp , data = data, weights = ~v0010, cluster = ~uf_nascim)
+summary(model1_sp_edu_income)
+```
+
+### Brancas
+```{r reg1_2010_lfp_hworked_brancas }
+data_brancas <- data |> 
+  filter(v0606 == 1)
+
+model1_brancas_sp_edu_income <- feols(hworked_fem_mid ~ Women_White_30_49_2000 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + children_under_5| factor(age_fem) + age_squared_fem + v1004+ age_sp , data = data_brancas, weights = ~v0010, cluster = ~uf_nascim)
+summary(model1_brancas_sp_edu_income)
+```
+
+### Pretas
+```{r reg1_2010_lfp_hworked_pretas}
+data_pretas <- data |> 
+  filter(v0606 %in% c(2,4))
+
+model1_preta_sp_edu_income <- feols(hworked_fem_mid ~ Women_Black_or_Pardo_30_49_2000 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + children_under_5| factor(age_fem) + age_squared_fem + v1004 + age_sp , data = data_pretas, weights = ~v0010, cluster = ~uf_nascim)
+summary(model1_preta_sp_edu_income)
+```
+
+## Avaliando o impacto da lfp da UF de origem sobre o número de filhos da mulher migrante
+
+### Total
+```{r reg1_2010_lfp_children}
+model1_sp_edu_income <- feols(children ~ Women_30_49_2000 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + children_under_5| factor(age_fem) + age_squared_fem + v1004 + age_fem + age_squared_fem + age_sp , data = data, weights = ~v0010, cluster = ~uf_nascim)
+summary(model1_sp_edu_income)
+```
+
+### Brancas
+```{r reg1_2010_lfp_children_brancas}
+data_brancas <- data |> 
+  filter(v0606 == 1)
+
+model1_brancas_sp_edu_income <- feols(children ~ Women_White_30_49_2000 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + children_under_5| factor(age_fem) + age_squared_fem + v1004 + age_fem + age_squared_fem + age_sp , data = data_brancas, weights = ~v0010, cluster = ~uf_nascim)
+summary(model1_brancas_sp_edu_income)
+```
+
+### Pretas
+```{r reg1_2010_lfp_children_pretas}
+data_pretas <- data |> 
+  filter(v0606 %in% c(2,4))
+
+model1_preta_sp_edu_income <- feols(children ~ Women_Black_or_Pardo_30_49_2000 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp + children_under_5| factor(age_fem) + age_squared_fem + v1004 + age_fem + age_squared_fem + age_sp , data = data_pretas, weights = ~v0010, cluster = ~uf_nascim)
+summary(model1_preta_sp_edu_income)
+```
+
+## Avaliando o impacto da tfr.y da UF de origem sobre o número de filhos da mulher migrante
+## Number of children
+### Total
+```{r reg1_2010_tfr_children}
+model1_sp_edu_income <- feols(children ~ tfr.y + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp | factor(age_fem) + age_squared_fem + v1004  + age_sp , data = data, weights = ~v0010, cluster = ~uf_nascim)
+summary(model1_sp_edu_income)
+```
+
+## Number of children - Brancas
+```{r reg1_2010_tfr_children_brancas}
+model1_sp_edu_income <- feols(children ~ tfr.y + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp | factor(age_fem) + age_squared_fem + v1004  + age_sp , data = data_brancas, weights = ~v0010, cluster = ~uf_nascim)
+summary(model1_sp_edu_income)
+```
+
+## Number of children - Pretas
+```{r reg1_2010_tfr_children_pretas}
+model1_sp_edu_income <- feols(children ~ tfr.y + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp | factor(age_fem) + age_squared_fem + v1004 + age_sp , data = data_pretas, weights = ~v0010, cluster = ~uf_nascim)
+summary(model1_sp_edu_income)
+```
+
+## Avaliando o impacto da tfr.y da UF de origem sobre as horas trabalhadas da mulher migrante
+## Number of children
+### Total
+```{r reg1_2010_tfr_hworked}
+model1_sp_edu_income <- feols(hworked_fem_mid ~ tfr.y + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp | factor(age_fem) + age_squared_fem + v1004  + age_sp , data = data, weights = ~v0010, cluster = ~uf_nascim)
+summary(model1_sp_edu_income)
+```
+
+## Number of children - Brancas
+```{r reg1_2010_tfr_hworked_brancas}
+model1_sp_edu_income <- feols(hworked_fem_mid ~ tfr.y + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp | factor(age_fem) + age_squared_fem + v1004  + age_sp , data = data_brancas, weights = ~v0010, cluster = ~uf_nascim)
+summary(model1_sp_edu_income)
+```
+
+## Number of children - Pretas
+```{r reg1_2010_tfr_hworked_pretas}
+model1_sp_edu_income <- feols(hworked_fem_mid ~ tfr.y + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp | factor(age_fem) + age_squared_fem + v1004 + age_sp , data = data_pretas, weights = ~v0010, cluster = ~uf_nascim)
+summary(model1_sp_edu_income)
+```
+
+
+```{r image}
+#setwd("C:/Users/thtak/OneDrive - Fundacao Getulio Vargas - FGV/Tese_Mestrado/1_migration/2_scripts_migration")
+#save.image("2010_2000.RData")
+
+savehistory(file = "full_history.Rhistory")
+
+```
+

@@ -1,0 +1,42 @@
+---
+title: "Análise 2000: usando dados de lfp + tfr de 1980"
+author: "Thais Takeuchi"
+date: "2024-10-12"
+output: html_document
+---
+
+## Load packages
+```{r load, message=FALSE, warning=FALSE, include=FALSE}
+#######################
+# PREPARE ENVIRONMENT
+#######################
+
+rm(list = ls())
+
+load.lib <- c("data.table","foreign","stargazer","devtools","stringi", "srvyr", "survey","tidyverse","gtools", "remote","installr","microdadosBrasil","ggplot2","viridis","hrbrthemes","WDI","dplyr", "arrow", "readxl","rio","writexl","dineq", "basedosdados", "httr", "haven", "openxlsx", "fixest", "readxl", "geobr")
+
+install.lib <- load.lib[!load.lib %in% installed.packages()]
+for(lib in install.lib) install.packages(lib,dependencies=TRUE)
+sapply(load.lib, require, character=TRUE)
+```
+
+
+```{r}
+library(geobr)
+
+# Baixar limites municipais para 1980
+municipios_1960 <- read_municipality(year = 1960)
+
+# Baixar limites municipais para 2000
+municipios_1960 <- read_municipality(year = 1960)
+
+```
+
+
+
+
+```{r image}
+setwd("C:/Users/thtak/OneDrive - Fundacao Getulio Vargas - FGV/Tese_Mestrado/1_migration/2_scripts_migration")
+#save.image("2010_2000.RData")
+```
+

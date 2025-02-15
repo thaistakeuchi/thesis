@@ -1,0 +1,3455 @@
+---
+title: "Results for 2010, 2000 and 1991 - corrected for tfr 1970 and 1980"
+author: "Thais Takeuchi"
+date: "2025-02-09"
+output: html_document
+---
+
+## Load packages
+
+```{r load, message=FALSE, warning=FALSE, include=FALSE}
+#######################
+# PREPARE ENVIRONMENT
+#######################
+
+rm(list = ls())
+
+load.lib <- c("data.table","foreign","stargazer","devtools","stringi", "srvyr", "survey","tidyverse","gtools", "remote","installr","microdadosBrasil","ggplot2","viridis","hrbrthemes","WDI","dplyr", "arrow", "readxl","rio","writexl","dineq", "basedosdados", "httr", "haven", "openxlsx", "fixest", "readxl", "xtable", "kableExtra", "margins","marginaleffects", "Hmisc")
+
+install.lib <- load.lib[!load.lib %in% installed.packages()]
+for(lib in install.lib) install.packages(lib,dependencies=TRUE)
+sapply(load.lib, require, character=TRUE)
+```
+
+## CENSOS
+
+```{r census + tfr correta}
+#########
+# CENSUS
+#########
+
+# 1991 #
+data_1991 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_30_49.xlsx")
+
+# exclui tfr_1970 errada
+data_1991 <- data_1991 |> 
+  dplyr::select(-tfr_1970)
+
+# inclui tfr correta + merge data
+tfr_1940_1980_uf <- read_xlsx("D:/1_migration/1_datasets_migrants/fecundidade_brasil/tfr_1940_1980_correta.xlsx")
+tfr_1970_uf <- tfr_1940_1980_uf |>
+  dplyr::select(uf_nascim, tfr_1970)
+data_1991 <- merge(data_1991, tfr_1970_uf, by = "uf_nascim")
+
+
+# 2000 #
+data_2000 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_2000_proxies_1980_30_49.xlsx")
+
+# exclui tfr_1980 errada
+data_2000 <- data_2000 |> 
+  dplyr::select(-tfr_1980)
+
+# inclui tfr correta + merge data
+tfr_1980_uf <- tfr_1940_1980_uf |>
+  dplyr::select(uf_nascim, tfr_1980)
+data_2000 <- merge(data_2000, tfr_1980_uf, by = "uf_nascim")
+
+# 2010 #
+data_2010 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_2010_proxies_1991_30_49.xlsx")
+
+```
+
+## CENSOS - area
+
+```{r census area}
+#######
+# AREA
+#######
+
+# 1991
+## urbana
+data_urbana_1991 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_30_49_urbana.xlsx")
+
+## rural
+data_rural_1991 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_30_49_rural.xlsx")
+
+# 2000
+## urbana
+data_urbana_2000 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_2000_proxies_1980_30_49_urbana.xlsx")
+
+## rural
+data_rural_2000 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_2000_proxies_1980_30_49_rural.xlsx")
+
+# arruma tfr para as bases acima
+data_urbana_1991 <- data_urbana_1991 |> 
+  dplyr::select(-tfr_1970)
+data_urbana_1991 <- merge(data_urbana_1991, tfr_1970_uf, by = "uf_nascim")
+
+data_rural_1991 <- data_rural_1991 |> 
+  dplyr::select(-tfr_1970)
+data_rural_1991 <- merge(data_rural_1991, tfr_1970_uf, by = "uf_nascim")
+
+data_urbana_2000 <- data_urbana_2000 |> 
+  dplyr::select(-tfr_1980)
+data_urbana_2000 <- merge(data_urbana_2000, tfr_1980_uf, by = "uf_nascim")
+
+data_rural_2000 <- data_rural_2000 |> 
+  dplyr::select(-tfr_1980)
+data_rural_2000 <- merge(data_rural_2000, tfr_1980_uf, by = "uf_nascim")
+
+# 2010
+## urbana
+data_urbana_2010 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_2010_proxies_1991_30_49_urbana.xlsx")
+
+## rural
+data_rural_2010 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_2010_proxies_1991_30_49_rural.xlsx")
+
+```
+
+# CENSOS - race
+
+```{r census race}
+#######
+# RACE
+#######
+
+## White
+## 1991
+data_white_1991 <- data_1991 |> 
+  filter(V0309 == 1)
+
+## 2000
+data_white_2000 <- data_2000 |> 
+  filter(v0408 == 1)
+
+## 2010
+data_white_2010 <- data_2010 |> 
+  filter(raca == 1)
+
+## Black/Brown
+## 1991
+data_black_1991 <- data_1991 |> 
+  filter(V0309 %in% c(2,4))
+
+## 2000
+data_black_2000 <- data_2000 |> 
+  filter(v0408 %in% c(2,4))
+
+## 2010
+data_black_2010 <- data_2010 |> 
+  filter(raca %in% c(2,4))
+
+```
+
+# CENSOS - outlier states on LFP
+
+
+```{r census outlier states on LFP}
+##############
+# STATES - LFP
+##############
+
+## highest and smallest LFP
+## 1991
+data_without_53_51_1991 <- data_1991 |> # Brasilia/Mato Grosso
+  filter(uf_nascim != 53) |> 
+  filter(uf_nascim != 51)
+
+## 2000
+data_without_53_51_2000 <- data_2000 |>  # Brasilia/Mato Grosso
+  filter(uf_nascim != 53) |> 
+  filter(uf_nascim != 51)
+
+## 2010
+data_without_53_17_2010 <- data_2010 |>  # Brasilia/Tocantins
+  filter(uf_nascim != 53) |> 
+  filter(uf_nascim != 17)
+
+```
+
+```{r census outlier states on TFR}
+##############
+# STATES - TFR
+##############
+
+## highest/smallest TFR
+## 1991
+data_without_12_33_1991 <- data_1991 |> # acre/rj
+  filter(uf_nascim != 12) |> 
+  filter(uf_nascim != 33)
+
+## 2000
+data_without_16_33_2000 <- data_2000 |>  # amapá/rj
+  filter(uf_nascim != 16) |> 
+  filter(uf_nascim != 33)
+
+## 2010
+data_without_16_33_2010 <- data_2010 |>  # amapá/rj
+  filter(uf_nascim != 16) |> 
+  filter(uf_nascim != 33)
+
+```
+
+# CENSUS - age
+```{r census per age}
+########################
+# AGE (40-49)
+########################
+
+## 1991
+data_40_49_1991 <- data_1991 |> 
+  filter(age_fem %in% c(40:49))
+
+## 2000
+data_40_49_2000 <- data_2000 |>  
+  filter(age_fem %in% c(40:49))
+
+## 2010
+data_40_49_2010 <- data_2010 |>  
+  filter(age_fem %in% c(40:49))
+
+########################
+# AGE (30-39)
+########################
+
+## 1991
+data_30_39_1991 <- data_1991 |> 
+  filter(age_fem %in% c(30:39))
+
+## 2000
+data_30_39_2000 <- data_2000 |>  
+  filter(age_fem %in% c(30:39))
+
+## 2010
+data_30_39_2010 <- data_2010 |>  
+  filter(age_fem %in% c(30:39))
+
+```
+
+# CENSUS - income and human capital
+
+```{r census on median income and human capital 20 years before the censuses}
+################################################
+# INCOME AND EDUCATION 20 YEARS BEFORE THE CENSUS
+################################################
+
+# 1991
+m_educ_1970 <- read_xlsx("D:/1_migration/1_datasets_migrants/educ/educ_anos_30_60_1970.xlsx")
+sm_1970 <- read_xlsx("D:/1_migration/1_datasets_migrants/salario/salario_medio_30_60_por_uf_1970.xlsx")
+
+data_inc_educ_1991 <- merge(data_1991, m_educ_1970, by = "uf_nascim")
+data_inc_educ_1991 <- merge(data_inc_educ_1991, sm_1970, by = "uf_nascim")
+
+# 2000
+m_educ_1980 <- read_xlsx("D:/1_migration/1_datasets_migrants/educ/educ_anos_30_60_1980.xlsx")
+sm_1980 <- read_xlsx("D:/1_migration/1_datasets_migrants/salario/salario_medio_30_60_por_uf_1980.xlsx")
+
+data_inc_educ_2000 <- merge(data_2000, m_educ_1980, by = "uf_nascim")
+data_inc_educ_2000 <- merge(data_inc_educ_2000, sm_1980, by = "uf_nascim")
+
+
+## 2010
+m_educ_1991 <- read_xlsx("D:/1_migration/1_datasets_migrants/educ/educ_anos_30_60_1991.xlsx")
+sm_1991 <- read_xlsx("D:/1_migration/1_datasets_migrants/salario/salario_medio_30_60_por_uf_1991.xlsx")
+
+data_inc_educ_2010 <- merge(data_2010, m_educ_1991, by = "uf_nascim")
+data_inc_educ_2010 <- merge(data_inc_educ_2010, sm_1991, by = "uf_nascim")
+```
+
+# CENSUS - per state
+
+```{r census per state}
+########
+# STATE
+########
+
+## 1991
+ufs <- c(51, 12, 35, 50, 42, 14, 13, 41, 28, 33, 43, 15, 17, 53, 52, 22, 31, 26, 24, 32, 21, 11, 29, 23, 25, 16, 27)
+
+# Loop para criar um dataframe para cada UF na lista especificada
+for (estado in ufs) {
+  assign(paste0("data_1991_", estado), data_1991 %>% filter(UF == estado))
+}
+
+## 2000
+ufs <- c(51, 12, 35, 50, 42, 14, 13, 41, 28, 33, 43, 15, 17, 53, 52, 22, 31, 26, 24, 32, 21, 11, 29, 23, 25, 16, 27)
+
+# Loop para criar um dataframe para cada UF na lista especificada
+for (estado in ufs) {
+  assign(paste0("data_2000_", estado), data_2000 %>% filter(v0102 == estado))
+}
+
+## 2010
+ufs <- c(51, 12, 35, 50, 42, 14, 13, 41, 28, 33, 43, 15, 17, 53, 52, 22, 31, 26, 24, 32, 21, 11, 29, 23, 25, 16, 27)
+
+# Loop para criar um dataframe para cada UF na lista especificada
+for (estado in ufs) {
+  assign(paste0("data_2010_", estado), data_2010 %>% filter(UF == estado))
+}
+
+```
+
+# CENSUS - munic % migrants
+## REVISAR
+```{r count migrants}
+
+data_1991 <- data_1991 |> 
+  rename(municipio = V1102) |> 
+  rename(peso = V7300)
+
+ranking_uf_municipio <- data_1991 %>%
+  group_by(uf_nascim, municipio) %>% # Agrupar por UF de nascimento e município
+  summarise(n_pessoas_ponderado = sum(peso, na.rm = TRUE)) %>% # Somar os pesos
+  arrange(uf_nascim, desc(n_pessoas_ponderado)) %>% # Ordenar por UF e maior concentração
+  mutate(ranking_uf_municipio = row_number()) # Criar ranking dentro de cada UF
+
+ranking_uf_municipio %>%
+  filter(ranking_uf_municipio <= 5) %>% # Selecionar os 5 primeiros rankings por UF
+  print()
+
+ranking_uf_municipio <- data_1991 %>%
+  group_by(uf_nascim, municipio) %>% # Agrupar por UF e município
+  summarise(n_pessoas_ponderado = sum(peso, na.rm = TRUE)) %>% # Soma ponderada
+  arrange(uf_nascim, desc(n_pessoas_ponderado)) %>% # Ordenar por UF e concentração
+  slice_max(n_pessoas_ponderado, n = 1, with_ties = FALSE) %>% # Selecionar o maior município por UF
+  ungroup() # Remover agrupamento
+ranking_uf_municipio %>%
+  kable(caption = "Maior concentração por UF em cada município")
+# Visualizar o resultado
+head(nascidos_ceara) # Para o Ceará
+head(nascidos_uf_municipio) # Para todas as UFs
+```
+
+
+```{r}
+# Calcular a concentração em porcentagem
+ranking_uf_municipio <- data_1991 %>%
+  group_by(uf_nascim, municipio) %>% 
+  summarise(n_pessoas_ponderado = sum(peso, na.rm = TRUE)) %>% # Soma ponderada por município
+  group_by(uf_nascim) %>% 
+  mutate(total_uf = sum(n_pessoas_ponderado, na.rm = TRUE), # Soma total por UF
+         concentracao_percentual = (n_pessoas_ponderado / total_uf) * 100) %>% # Percentual
+  arrange(uf_nascim, desc(concentracao_percentual)) %>% # Ordenar por concentração
+  ungroup()
+
+# Selecionar os 5 municípios com maior concentração por UF
+top_5_municipios <- ranking_uf_municipio %>%
+  group_by(uf_nascim) %>% 
+  slice_max(concentracao_percentual, n = 5) %>% # Selecionar os 5 maiores
+  ungroup()
+
+# Visualizar os resultados
+print(top_5_municipios)
+
+```
+
+
+```{r}
+ranking <- read_csv("D:/1_migration/1_datasets_migrants/resultado_municipio_uf.csv")
+```
+
+
+
+
+
+Education variables.
+
+```{r education variables}
+#data_1991 <- data_1991 |> 
+  #mutate(
+    #menos_fund_mulher = ifelse(V0328 %in% c(0,1,2) & migrante_casada == 1, 1, 0),
+    #menos_fund_homem  = ifelse(V0328 %in% c(0,1,2) & sexo == 1, 1, 0))
+```
+
+
+> # FE Regressions
+
+# FE REGRESSIONS !!!
+
+# WORK
+## Avaliando o impacto da lfp da UF de origem sobre a probabilidade de ocupação da mulher migrante
+
+#### Variables:
+```{r variables in latex}
+var_labels <- c(
+  
+  # dependent variables
+  "ocup_migrante" = "Employed Migrant",
+  "ocupada_migrante_15" = "Employed Migrant",
+  "children" = "Number of Children",
+
+  # cultural proxies
+  "lfp_uf_30_49_1970" = "Labor Force Participation (1970)",
+  "lfp_uf_30_39_1970" = "Labor Force Participation (1970): 30-39",
+  "lfp_uf_40_49_1970" = "Labor Force Participation (1970): 40-49",
+
+  "lfp_uf_30_49_1980" = "Labor Force Participation (1980)",
+  "lfp_uf_30_39_1980" = "Labor Force Participation (1980): 30-39",
+  "lfp_uf_40_49_1980" = "Labor Force Participation (1980): 40-49",
+
+  "lfp_uf_30_49_1991" = "Labor Force Participation (1991)",
+  "lfp_uf_30_39_1991" = "Labor Force Participation (1991): 30-39",
+  "lfp_uf_40_49_1991" = "Labor Force Participation (1991): 40-49",
+
+  "tfr_1970" = "Fertility Rate (1970)",
+  "tfr_1980" = "Fertility Rate (1980)",
+  "tfr_1991" = "Fertility Rate (1991)",
+
+  # additional cultural proxies
+  # human capital 20 years ago (review! strange numbers)
+
+  "anos_estudo_1970_30_60" = "Average Education (1970)",
+  "anos_estudo_1980_30_60" = "Average Education (1980)",
+  "anos_estudo_1991_30_60" = "Average Education (1991)",
+
+  
+  # income 20 years ago
+  "salario_1991_defl_para_2010" = "Average Income (1991)",
+  "salario_1980_defl_para_2010" = "Average Income (1980)",
+  "salario_1970_defl_para_2010" = "Average Income (1970)",
+  
+  # controls
+  "fund_mulher" = "Basic Education (Wife)",
+  "em_mulher" = "High School (Wife)",
+  "superior_mulher" = "Higher Education (Wife)",
+  "fund_homem" = "Basic Education (Spouse)",
+  "em_homem" = "High School (Spouse)",
+  "superior_homem" = "Higher Education (Spouse)",
+  "income_sp_raw" = "Income (Spouse)",
+  "age_fem" = "Age (Wife)",
+  "age_sp" = "Age (Spouse)",
+  "age_squared_fem" = "Age Squared (Wife)",
+  "age_squared_sp" = "Age Squared (Spouse)",
+  "children_under_5" = "Number of Children Under 5", # work regression
+  
+  # fixed effects
+  "V1102" = "Municipality",
+  "v0103" = "Municipality",
+  "munic" = "Municipality",
+  # cluster
+  "uf_nascim" = "State of Birth"
+)
+```
+
+### 1991
+
+#### only lfp 1991
+
+```{r work 1991 1}
+work_1991_1 <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970+ age_fem + age_squared_fem + age_sp + age_squared_sp|V1102, data = data_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_1)
+etable(work_1991_1, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### lfp 1991 + woman's schooling
+
+```{r work 1991 2}
+work_1991_2 <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher+ age_fem + age_squared_fem + age_sp + age_squared_sp|V1102, data = data_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_2)
+etable(work_1991_2, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### lfp 1991 + woman's schooling + spouse's schooling
+
+```{r work 1991 3}
+work_1991_3 <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + age_fem + age_squared_fem + age_sp + age_squared_sp + income_sp_raw|V1102, data = data_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_3)
+etable(work_1991_3, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### lfp 1991 + spouse's schooling
+
+```{r work 1991 5}
+work_1991_5 <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp + children_under_5 |V1102, data = data_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_5)
+etable(work_1991_5, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### everything
+
+```{r work 1991 4}
+work_1991_4 <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp + children_under_5|V1102, data = data_inc_educ_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4)
+etable(work_1991_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r 1991}
+work_main <- capture.output(
+  etable(work_1991_1, work_1991_2, work_1991_5,work_1991_3, work_1991_4, 
+         tex = TRUE, dict = var_labels, digits = "r4")
+)
+caminho_arquivo <- "D:/1_migration/4_results_migrants/1991_1970/regression/1_1991_work_main.txt"
+writeLines(work_main, con = caminho_arquivo)
+```
+
+### 2000
+
+#### only lfp 1980
+
+```{r work 2000 1}
+work_2000_1 <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + age_fem + age_squared_fem + age_sp + age_squared_sp + age_squared_sp|v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_1)
+etable(work_2000_1, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### lfp 1980 + woman's schooling
+
+```{r work 2000 2}
+work_2000_2 <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher+ age_fem + age_squared_fem + age_sp + age_squared_sp|v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_2)
+etable(work_2000_2, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### lfp 1980 + woman's schooling + spouse's schooling
+
+```{r work 2000 3}
+work_2000_3 <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + age_fem + age_squared_fem + age_sp + age_squared_sp + income_sp_raw|v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_3)
+etable(work_2000_3, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### lfp 1980 + spouse's schooling
+
+```{r work 2000 5}
+work_2000_5 <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp + children_under_5|v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_5)
+etable(work_2000_5, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### everything
+
+```{r work 2000 4}
+work_2000_4 <- feols(ocupada_migrante_15~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp + children_under_5 |v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4)
+etable(work_2000_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r 2000}
+work_main_2000 <- capture.output(
+  etable(work_2000_1, work_2000_2, work_2000_5,work_2000_3, work_2000_4, 
+         tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_2000 <- "D:/1_migration/4_results_migrants/2000_1980/1_2000_work_main.txt"
+writeLines(work_main_2000, con = path_2000)
+```
+
+### 2010
+
+#### only lfp 2010
+
+```{r work 2010 1}
+work_2010_1 <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + age_fem + age_squared_fem + age_sp + age_squared_sp |munic, data = data_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_1)
+etable(work_2010_1, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### lfp 2010 + woman's schooling
+
+```{r work 2010 2}
+work_2010_2 <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ age_fem + age_squared_fem + age_sp + age_squared_sp|munic, data = data_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_2)
+etable(work_2010_2, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### lfp 2010 + woman's schooling + spouse's schooling
+
+```{r work 2010 3}
+work_2010_3 <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp|munic, data = data_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_3)
+etable(work_2010_3, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### lfp 2010 + spouse's schooling
+
+```{r work 2010 5}
+work_2010_5 <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp +children_under_5|munic, data = data_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_5)
+etable(work_2010_5, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### everything
+
+```{r work 2010 4}
+work_2010_4 <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp +children_under_5|munic, data = data_inc_educ_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4)
+etable(work_2010_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r 2010}
+etable(work_2010_1, work_2010_2, work_2010_5, work_2010_3, work_2010_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r 2010}
+work_main_2010 <- capture.output(
+  etable(work_2010_1, work_2010_2, work_2010_5,work_2010_3, work_2010_4, 
+         tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_2010 <- "D:/1_migration/4_results_migrants/2010_1991/1_2010_work_main.txt"
+writeLines(work_main_2010, con = path_2010)
+```
+
+#### altogether
+
+```{r 1991 2000 2010}
+work_main_all <- capture.output(
+  etable(work_1991_5, work_1991_4, work_2000_5, work_2000_4, work_2010_5,work_2010_4, 
+         tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_all<- "D:/1_migration/4_results_migrants/all/work/1_all_work_main.txt"
+writeLines(work_main_all, con = path_all)
+```
+
+# Elasticities - work
+
+```{r work_elast_1991}
+
+mean_work_1991 <- weighted.mean(data_1991$ocupada_migrante_15, w = data_1991$V7301, na.rm = TRUE)
+mean_work_2000 <- weighted.mean(data_2000$ocupada_migrante_15, w = data_2000$P001, na.rm = TRUE)
+mean_work_2010 <- weighted.mean(data_2010$ocup_migrante, w = data_2010$peso_pess, na.rm = TRUE)
+
+# from lfp bases
+mean_lfp_1970 <- 0.189876402099703
+mean_lfp_1980 <- 0.299658860158131
+mean_lfp_1991 <- 0.304186291322243
+
+sd_lfp_1970 <- sd(data_1991$lfp_uf_30_49_1970, na.rm = TRUE)
+sd_lfp_1980 <- sd(data_2000$lfp_uf_30_49_1980, na.rm = TRUE)
+sd_lfp_1991 <- sd(data_2010$lfp_uf_30_49_1991, na.rm = TRUE)
+
+#sd_lfp_1970 <- sqrt(wtd.var(data_1991$lfp_uf_30_49_1970, weights = data_1991$V7301, na.rm = TRUE))
+#sd_lfp_1980 <- sqrt(wtd.var(data_2000$lfp_uf_30_49_1980, weights = data_2000$P001, na.rm = TRUE))
+#sd_lfp_1991 <- sqrt(wtd.var(data_2010$lfp_uf_30_49_1991, weights = data_2010$peso_pess, na.rm = TRUE))
+
+
+# 1991
+coef_lfp_1970_1 <- coef(work_1991_1)["lfp_uf_30_49_1970"]
+elasticidade_lfp_1970_1 <- coef_lfp_1970_1 * (mean_lfp_1970 / mean_work_1991)
+
+coef_lfp_1970_2 <- coef(work_1991_2)["lfp_uf_30_49_1970"]
+elasticidade_lfp_1970_2 <- coef_lfp_1970_2 * (mean_lfp_1970 / mean_work_1991)
+
+coef_lfp_1970_3 <- coef(work_1991_3)["lfp_uf_30_49_1970"]
+elasticidade_lfp_1970_3 <- coef_lfp_1970_3 * (mean_lfp_1970 / mean_work_1991)
+
+coef_lfp_1970_4 <- coef(work_1991_4)["lfp_uf_30_49_1970"]
+elasticidade_lfp_1970_4 <- coef_lfp_1970_4 * (mean_lfp_1970 / mean_work_1991)
+
+coef_lfp_1970_5 <- coef(work_1991_5)["lfp_uf_30_49_1970"]
+elasticidade_lfp_1970_5 <- coef_lfp_1970_5 * (mean_lfp_1970 / mean_work_1991)
+
+# 2000
+coef_lfp_1980_1 <- coef(work_2000_1)["lfp_uf_30_49_1980"]
+elasticidade_lfp_1980_1 <- coef_lfp_1980_1 * (mean_lfp_1980 / mean_work_2000)
+
+coef_lfp_1980_2 <- coef(work_2000_2)["lfp_uf_30_49_1980"]
+elasticidade_lfp_1980_2 <- coef_lfp_1980_2 * (mean_lfp_1980 / mean_work_2000)
+
+coef_lfp_1980_3 <- coef(work_2000_3)["lfp_uf_30_49_1980"]
+elasticidade_lfp_1980_3 <- coef_lfp_1980_3 * (mean_lfp_1980 / mean_work_2000)
+
+coef_lfp_1980_4 <- coef(work_2000_4)["lfp_uf_30_49_1980"]
+elasticidade_lfp_1980_4 <- coef_lfp_1980_4 * (mean_lfp_1980 / mean_work_2000)
+
+coef_lfp_1980_5 <- coef(work_2000_5)["lfp_uf_30_49_1980"]
+elasticidade_lfp_1980_5 <- coef_lfp_1980_5 * (mean_lfp_1980 / mean_work_2000)
+
+# 2010
+coef_lfp_1991_1 <- coef(work_2010_1)["lfp_uf_30_49_1991"]
+elasticidade_lfp_1991_1 <- coef_lfp_1991_1 * (mean_lfp_1991 / mean_work_2010)
+
+coef_lfp_1991_2 <- coef(work_2010_2)["lfp_uf_30_49_1991"]
+elasticidade_lfp_1991_2 <- coef_lfp_1991_2 * (mean_lfp_1991 / mean_work_2010)
+
+coef_lfp_1991_3 <- coef(work_2010_3)["lfp_uf_30_49_1991"]
+elasticidade_lfp_1991_3 <- coef_lfp_1991_3 * (mean_lfp_1991 / mean_work_2010)
+
+coef_lfp_1991_4 <- coef(work_2010_4)["lfp_uf_30_49_1991"]
+elasticidade_lfp_1991_4 <- coef_lfp_1991_4 * (mean_lfp_1991 / mean_work_2010)
+
+coef_lfp_1991_5 <- coef(work_2010_5)["lfp_uf_30_49_1991"]
+elasticidade_lfp_1991_5 <- coef_lfp_1991_5 * (mean_lfp_1991 / mean_work_2010)
+
+# table
+e_table <- data.frame(
+  Model = paste0("Model ", 1:2),
+  Elasticity_1991 = c(elasticidade_lfp_1970_5,elasticidade_lfp_1970_4),
+  Elasticity_2000 = c(elasticidade_lfp_1980_5, elasticidade_lfp_1980_4),
+  Elasticity_2010 = c(elasticidade_lfp_1991_5, elasticidade_lfp_1991_4)
+)
+e_table[, -1] <- apply(e_table[, -1], 2, function(x) format(round(x, 4), nsmall = 4))
+
+# Display the table
+print(e_table, digits(4))
+
+# table
+e_table <- data.frame(
+  Model = paste0("Model ", 1:5),
+  Elasticity_1991 = c(elasticidade_lfp_1970_1, elasticidade_lfp_1970_2, elasticidade_lfp_1970_5, elasticidade_lfp_1970_3,elasticidade_lfp_1970_4),
+  Elasticity_2000 = c(elasticidade_lfp_1980_1, elasticidade_lfp_1980_2, elasticidade_lfp_1980_5, elasticidade_lfp_1980_3, elasticidade_lfp_1980_4),
+  Elasticity_2010 = c(elasticidade_lfp_1991_1, elasticidade_lfp_1991_2, elasticidade_lfp_1991_5, elasticidade_lfp_1991_3, elasticidade_lfp_1991_4)
+)
+e_table[, -1] <- apply(e_table[, -1], 2, function(x) format(round(x, 4), nsmall = 4))
+
+# Display the table
+print(e_table, digits(4))
+
+```
+
+> # Robustness - Human Capital - work
+
+# RW:Human Capital
+## 1991
+
+```{r work 1991 4 age 40-49}
+work_1991_4_rob_hc <- feols(ocupada_migrante_15~ anos_estudo_1970_30_60+lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp + children_under_5 |V1102, data = data_inc_educ_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4_rob_hc)
+etable(work_1991_4_rob_hc, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+
+```{r work 2000 4 age 40-49}
+work_2000_4_rob_hc <- feols(ocupada_migrante_15 ~ anos_estudo_1980_30_60+lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp + children_under_5|v0103, data = data_inc_educ_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4_rob_hc)
+etable(work_2000_4_rob_hc, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+
+```{r work 2010 4 age 40-49}
+work_2010_4_rob_hc <- feols(ocup_migrante ~ anos_estudo_1991_30_60+lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp +children_under_5|munic, data = data_inc_educ_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4_rob_hc)
+etable(work_2010_4_rob_hc, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r c rob hc}
+w_all_hc <- capture.output(
+  etable(
+  work_1991_4_rob_hc,
+  work_2000_4_rob_hc,
+  work_2010_4_rob_hc,
+    tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_w_all<- "D:/1_migration/4_results_migrants/all/work/1_w_all_hc.txt"
+writeLines(w_all_hc, con = path_w_all)
+```
+
+
+EW: human capital
+
+```{r work_elast hc}
+
+# 1991
+coef_w_lfp_1970_4 <- coef(work_1991_4_rob_hc)["anos_estudo_1970_30_60"]
+elasticidade_w_lfp_1970_4 <- coef_w_lfp_1970_4 * (mean_lfp_1970 / mean_work_1991)
+
+# 2000
+coef_w_lfp_1980_4 <- coef(work_2000_4_rob_hc)["anos_estudo_1980_30_60"]
+elasticidade_w_lfp_1980_4 <- coef_w_lfp_1980_4 * (mean_lfp_1980 / mean_work_2000)
+
+# 2010
+coef_w_lfp_1991_4 <- coef(work_2010_4_rob_hc)["anos_estudo_1991_30_60"]
+elasticidade_w_lfp_1991_4 <- coef_w_lfp_1991_4 * (mean_lfp_1991 / mean_work_2010)
+
+# table
+e_table_hc <- data.frame(
+  Model = paste0("Model ", 1:1),
+  Elasticity_1991 = c(elasticidade_w_lfp_1970_4),
+  Elasticity_2000 = c(elasticidade_w_lfp_1980_4),
+  Elasticity_2010 = c(elasticidade_w_lfp_1991_4)
+)
+e_table_hc[, -1] <- apply(e_table_hc[, -1], 2, function(x) format(round(x, 4), nsmall = 4))
+# Display the table
+print(e_table_hc)
+
+coef_w_lfp_1970_4 <- coef(work_1991_4_rob_hc)["lfp_uf_30_49_1970"]
+elasticidade_w_lfp_1970_4 <- coef_w_lfp_1970_4 * (mean_lfp_1970 / mean_work_1991)
+
+coef_w_lfp_1980_4 <- coef(work_2000_4_rob_hc)["lfp_uf_30_49_1980"]
+elasticidade_w_lfp_1980_4 <- coef_w_lfp_1980_4 * (mean_lfp_1980 / mean_work_2000)
+
+coef_w_lfp_1991_4 <- coef(work_2010_4_rob_hc)["lfp_uf_30_49_1991"]
+elasticidade_w_lfp_1991_4 <- coef_w_lfp_1991_4 * (mean_lfp_1991 / mean_work_2010)
+
+# table
+e_table_hc <- data.frame(
+  Model = paste0("Model ", 1:1),
+  Elasticity_1991 = c(elasticidade_w_lfp_1970_4),
+  Elasticity_2000 = c(elasticidade_w_lfp_1980_4),
+  Elasticity_2010 = c(elasticidade_w_lfp_1991_4)
+)
+e_table_hc[, -1] <- apply(e_table_hc[, -1], 2, function(x) format(round(x, 4), nsmall = 4))
+
+# Display the table
+print(e_table_hc)
+
+```
+
+> # Robustness - Income 20 years ago - work
+
+# RW:Income 20 years ago
+## 1991
+
+```{r work 1991 4 age 40-49}
+work_1991_4_rob_s_lfp <- feols(ocupada_migrante_15~ salario_1970_defl_para_2010+lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp + children_under_5 |V1102, data = data_inc_educ_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4_rob_s_lfp)
+etable(work_1991_4_rob_s_lfp, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+
+```{r work 2000 4 age 40-49}
+work_2000_4_rob_s_lfp <- feols(ocupada_migrante_15 ~ salario_1980_defl_para_2010+lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp + children_under_5|v0103, data = data_inc_educ_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4_rob_s_lfp)
+etable(work_2000_4_rob_s_lfp, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+
+```{r work 2010 4 age 40-49}
+work_2010_4_rob_s_lfp <- feols(ocup_migrante ~ salario_1991_defl_para_2010+lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp +children_under_5|munic, data = data_inc_educ_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4_rob_s_lfp)
+etable(work_2010_4_rob_s_lfp, tex = TRUE, dict = var_labels, digits = "r4")
+```
+#### altogether
+
+```{r c rob s}
+w_all_s <- capture.output(
+  etable(
+  work_1991_4_rob_s_lfp,
+  work_2000_4_rob_s_lfp,
+  work_2010_4_rob_s_lfp,
+    tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_w_all<- "D:/1_migration/4_results_migrants/all/work/1_w_all_s.txt"
+writeLines(w_all_s, con = path_w_all)
+```
+
+Elasticities - race
+
+```{r work_elast race}
+# income
+
+# 1991
+coef_w_lfp_1970_4 <- coef(work_1991_4_rob_s_lfp)["salario_1970_defl_para_2010"]
+elasticidade_w_lfp_1970_4 <- coef_w_lfp_1970_4 * (mean_lfp_1970 / mean_work_1991)
+
+# 2000
+coef_w_lfp_1980_4 <- coef(work_2000_4_rob_s_lfp)["salario_1980_defl_para_2010"]
+elasticidade_w_lfp_1980_4 <- coef_w_lfp_1980_4 * (mean_lfp_1980 / mean_work_2000)
+
+# 2010
+coef_w_lfp_1991_4 <- coef(work_2010_4_rob_s_lfp)["salario_1991_defl_para_2010"]
+elasticidade_w_lfp_1991_4 <- coef_w_lfp_1991_4 * (mean_lfp_1991 / mean_work_2010)
+
+# Formatando os valores para 4 casas decimais
+e_table <- data.frame(
+  Model = paste0("Model ", 1:1),
+  Elasticity_1991 = formatC(c(elasticidade_w_lfp_1970_4), format = "f", digits = 4),
+  Elasticity_2000 = formatC(c(elasticidade_w_lfp_1980_4), format = "f", digits = 4),
+  Elasticity_2010 = formatC(c(elasticidade_w_lfp_1991_4), format = "f", digits = 4)
+)
+e_table[, -1] <- apply(e_table[, -1], 2, function(x) as.numeric(as.character(x)))
+
+e_table[, -1] <- apply(e_table[, -1], 2, function(x) format(round(x, 4), nsmall = 4))
+
+# Exibindo a tabela
+print(e_table)
+
+# lfp
+
+# 1991
+coef_w_lfp_1970_4 <- coef(work_1991_4_rob_s_lfp)["lfp_uf_30_49_1970"]
+elasticidade_w_lfp_1970_4 <- coef_w_lfp_1970_4 * (mean_lfp_1970 / mean_work_1991)
+
+# 2000
+coef_w_lfp_1980_4 <- coef(work_2000_4_rob_s_lfp)["lfp_uf_30_49_1980"]
+elasticidade_w_lfp_1980_4 <- coef_w_lfp_1980_4 * (mean_lfp_1980 / mean_work_2000)
+
+# 2010
+coef_w_lfp_1991_4 <- coef(work_2010_4_rob_s_lfp)["lfp_uf_30_49_1991"]
+elasticidade_w_lfp_1991_4 <- coef_w_lfp_1991_4 * (mean_lfp_1991 / mean_work_2010)
+
+# Formatando os valores para 4 casas decimais
+e_table <- data.frame(
+  Model = paste0("Model ", 1:1),
+  Elasticity_1991 = formatC(c(elasticidade_w_lfp_1970_4), format = "f", digits = 4),
+  Elasticity_2000 = formatC(c(elasticidade_w_lfp_1980_4), format = "f", digits = 4),
+  Elasticity_2010 = formatC(c(elasticidade_w_lfp_1991_4), format = "f", digits = 4)
+)
+e_table[, -1] <- apply(e_table[, -1], 2, function(x) as.numeric(as.character(x)))
+
+e_table[, -1] <- apply(e_table[, -1], 2, function(x) format(round(x, 4), nsmall = 4))
+
+# Exibindo a tabela
+print(e_table)
+```
+
+
+> # Robustness - Work - Race
+
+# RW: Race
+
+## 1991
+
+```{r work 1991 4 white}
+work_1991_4_white <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp + children_under_5 |V1102, data = data_white_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4_white)
+etable(work_1991_4_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 1991 4 black/brown}
+work_1991_4_black <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp + children_under_5 |V1102, data = data_black_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4_black)
+etable(work_1991_4_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+
+```{r work 2000 4 white}
+work_2000_4_white <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp + children_under_5|v0103, data = data_white_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4_white)
+etable(work_2000_4_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2000 4 black/brown}
+work_2000_4_black <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp + children_under_5|v0103, data = data_black_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4_black)
+etable(work_2000_4_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+
+```{r work 2010 4 white}
+work_2010_4_white <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp +children_under_5|munic, data = data_white_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4_white)
+etable(work_2010_4_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2010 4 black/brown}
+work_2010_4_black <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp +children_under_5|munic, data = data_black_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4_black)
+etable(work_2010_4_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r 1991 2000 2010 race}
+etable(
+  work_1991_4_white, work_1991_4_black,
+  work_2000_4_white, work_2000_4_black,
+  work_2010_4_white, work_2010_4_black,
+  tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r 1991 2000 2010 work race}
+rob_work_4_race <- capture.output(
+  etable(
+  work_1991_4_white, work_1991_4_black,
+  work_2000_4_white, work_2000_4_black,
+  work_2010_4_white, work_2010_4_black,
+         tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_all_work_4_race<- "D:/1_migration/4_results_migrants/all/work/1.2_all_work_race.txt"
+writeLines(rob_work_4_race, con = path_all_work_4_race)
+```
+
+Elasticities - race
+
+```{r work_elast race}
+mean_work_1991 <- weighted.mean(data_1991$ocupada_migrante_15, w = data_1991$V7301, na.rm = TRUE)
+mean_work_2000 <- weighted.mean(data_2000$ocupada_migrante_15, w = data_2000$P001, na.rm = TRUE)
+mean_work_2010 <- weighted.mean(data_2010$ocup_migrante, w = data_2010$peso_pess, na.rm = TRUE)
+
+# from lfp bases
+mean_lfp_1970 <- 0.189876402099703
+mean_lfp_1980 <- 0.299658860158131
+mean_lfp_1991 <- 0.304186291322243
+
+sd_lfp_1970 <- sqrt(wtd.var(data_1991$lfp_uf_30_49_1970, weights = data_1991$V7301, na.rm = TRUE))
+sd_lfp_1980 <- sqrt(wtd.var(data_2000$lfp_uf_30_49_1980, weights = data_2000$P001, na.rm = TRUE))
+sd_lfp_1991 <- sqrt(wtd.var(data_2010$lfp_uf_30_49_1991, weights = data_2010$peso_pess, na.rm = TRUE))
+
+
+# 1991
+coef_w_lfp_1970_4 <- coef(work_1991_4_white)["lfp_uf_30_49_1970"]
+elasticidade_w_lfp_1970_4 <- coef_w_lfp_1970_4 * (mean_lfp_1970 / mean_work_1991)
+
+coef_b_lfp_1970_4 <- coef(work_1991_4_black)["lfp_uf_30_49_1970"]
+elasticidade_b_lfp_1970_4 <- coef_b_lfp_1970_4 * (mean_lfp_1970 / mean_work_1991)
+
+# 2000
+coef_w_lfp_1980_4 <- coef(work_2000_4_white)["lfp_uf_30_49_1980"]
+elasticidade_w_lfp_1980_4 <- coef_w_lfp_1980_4 * (mean_lfp_1980 / mean_work_2000)
+
+coef_b_lfp_1980_4 <- coef(work_2000_4_black)["lfp_uf_30_49_1980"]
+elasticidade_b_lfp_1980_4 <- coef_b_lfp_1980_4 * (mean_lfp_1980 / mean_work_2000)
+
+# 2010
+coef_w_lfp_1991_4 <- coef(work_2010_4_white)["lfp_uf_30_49_1991"]
+elasticidade_w_lfp_1991_4 <- coef_w_lfp_1991_4 * (mean_lfp_1991 / mean_work_2010)
+
+coef_b_lfp_1991_4 <- coef(work_2010_4_black)["lfp_uf_30_49_1991"]
+elasticidade_b_lfp_1991_4 <- coef_b_lfp_1991_4 * (mean_lfp_1991 / mean_work_2010)
+
+# table
+e_table_race <- data.frame(
+  Model = paste0("Model ", 1:2),
+  Elasticity_1991 = c(elasticidade_w_lfp_1970_4, elasticidade_b_lfp_1970_4),
+  Elasticity_2000 = c(elasticidade_w_lfp_1980_4, elasticidade_b_lfp_1980_4),
+  Elasticity_2010 = c(elasticidade_w_lfp_1991_4, elasticidade_b_lfp_1991_4)
+)
+e_table_race[, -1] <- apply(e_table_race[, -1], 2, function(x) as.numeric(as.character(x)))
+
+e_table_race[, -1] <- apply(e_table_race[, -1], 2, function(x) format(round(x, 4), nsmall = 4))
+
+# Display the table
+print(e_table_race)
+
+```
+
+> # Robustness - state
+
+# RW:state
+
+Tira UF com maior e menor LFP em 1970, 80 e 91.
+
+## 1991
+
+```{r work 1991 4 rob higher lfp}
+work_1991_4_rob_higher_lfp <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp + children_under_5 |V1102, data = data_without_53_51_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4_rob_higher_lfp)
+etable(work_1991_4_rob_higher_lfp, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+
+```{r work 2000 4 rob higher lfp}
+work_2000_4_rob_higher_lfp <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp + children_under_5|v0103, data = data_without_53_51_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4_rob_higher_lfp)
+etable(work_2000_4_rob_higher_lfp, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+
+```{r work 2010 4 rob higher lfp}
+work_2010_4_rob_higher_lfp <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp +children_under_5|munic, data = data_without_53_17_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4_rob_higher_lfp)
+etable(work_2010_4_rob_higher_lfp, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r 1991 2000 2010 rob higher LFP}
+etable(work_1991_4_rob_higher_lfp, work_2000_4_rob_higher_lfp, work_2010_4_rob_higher_lfp, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r 1991 2000 2010 rob state}
+rob_work_4_state <- capture.output(
+  etable(
+    work_1991_4_rob_higher_lfp,
+    work_2000_4_rob_higher_lfp,
+    work_2010_4_rob_higher_lfp,
+         tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_all_rob_state<- "D:/1_migration/4_results_migrants/all/work/2_all_work_rob_state.txt"
+writeLines(rob_work_4_state, con = path_all_rob_state)
+```
+
+Elasticities - rob state
+
+```{r work_elast rob state}
+mean_work_1991 <- weighted.mean(data_1991$ocupada_migrante_15, w = data_1991$V7301, na.rm = TRUE)
+mean_work_2000 <- weighted.mean(data_2000$ocupada_migrante_15, w = data_2000$P001, na.rm = TRUE)
+mean_work_2010 <- weighted.mean(data_2010$ocup_migrante, w = data_2010$peso_pess, na.rm = TRUE)
+
+sd_lfp_1970 <- sqrt(wtd.var(data_1991$lfp_uf_30_49_1970, weights = data_1991$V7301, na.rm = TRUE))
+sd_lfp_1980 <- sqrt(wtd.var(data_2000$lfp_uf_30_49_1980, weights = data_2000$P001, na.rm = TRUE))
+sd_lfp_1991 <- sqrt(wtd.var(data_2010$lfp_uf_30_49_1991, weights = data_2010$peso_pess, na.rm = TRUE))
+
+# 1991
+coef_h_lfp_1970_4 <- coef(work_1991_4_rob_higher_lfp)["lfp_uf_30_49_1970"]
+elasticidade_h_lfp_1970_4 <- coef_h_lfp_1970_4 * (mean_lfp_1970 / mean_work_1991)
+
+# 2000
+coef_h_lfp_1980_4 <- coef(work_2000_4_rob_higher_lfp)["lfp_uf_30_49_1980"]
+elasticidade_h_lfp_1980_4 <- coef_h_lfp_1980_4 * (mean_lfp_1980 / mean_work_2000)
+
+# 2010
+coef_h_lfp_1991_4 <- coef(work_2010_4_rob_higher_lfp)["lfp_uf_30_49_1991"]
+elasticidade_h_lfp_1991_4 <- coef_h_lfp_1991_4 * (mean_lfp_1991 / mean_work_2010)
+
+# table
+e_table_rob_state <- data.frame(
+  Model = paste0("Model ", 1:1),
+  Elasticity_1991 = c(elasticidade_h_lfp_1970_4),
+  Elasticity_2000 = c(elasticidade_h_lfp_1980_4),
+  Elasticity_2010 = c(elasticidade_h_lfp_1991_4)
+)
+e_table_rob_state[, -1] <- apply(e_table_rob_state[, -1], 2, function(x) as.numeric(as.character(x)))
+
+e_table_rob_state[, -1] <- apply(e_table_rob_state[, -1], 2, function(x) format(round(x, 4), nsmall = 4))
+
+# Display the table
+print(e_table_rob_state)
+
+```
+
+> # Robustness - work age
+
+# RW: age 40-49
+
+## 1991
+
+```{r work 1991 4 age 40-49}
+work_1991_4_rob_40_49 <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp + children_under_5 |V1102, data = data_40_49_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4_rob_40_49)
+etable(work_1991_4_rob_40_49, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+
+```{r work 2000 4 age 40-49}
+work_2000_4_rob_40_49 <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp + children_under_5|v0103, data = data_40_49_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4_rob_40_49)
+etable(work_2000_4_rob_40_49, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+
+```{r work 2010 4 age 40-49}
+work_2010_4_rob_40_49 <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp +children_under_5|munic, data = data_40_49_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4_rob_40_49)
+etable(work_2010_4_rob_40_49, tex = TRUE, dict = var_labels, digits = "r4")
+```
+# RW: age 30-39
+
+## 1991
+
+```{r work 1991 4 age 30-39}
+work_1991_4_rob_30_39 <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp + children_under_5 |V1102, data = data_30_39_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4_rob_30_39)
+etable(work_1991_4_rob_30_39, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+
+```{r work 2000 4 age 30-39}
+work_2000_4_rob_30_39 <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp + children_under_5|v0103, data = data_30_39_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4_rob_30_39)
+etable(work_2000_4_rob_30_39, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+
+```{r work 2010 4 age 30-39}
+work_2010_4_rob_30_39 <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp +children_under_5|munic, data = data_30_39_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4_rob_30_39)
+etable(work_2010_4_rob_30_39, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r 1991 2000 2010 rob age}
+etable(
+  work_1991_4_rob_30_39, work_1991_4_rob_40_49, 
+  work_2000_4_rob_30_39,work_2000_4_rob_40_49,
+  work_2010_4_rob_30_39, work_2010_4_rob_40_49,
+  tex = TRUE, dict = var_labels, digits = "r4"
+  )
+```
+
+#### altogether
+
+```{r 1991 2000 2010 rob age}
+rob_work_4_age <- capture.output(
+  etable(
+  work_1991_4_rob_30_39, work_1991_4_rob_40_49, 
+  work_2000_4_rob_30_39,work_2000_4_rob_40_49,
+  work_2010_4_rob_30_39, work_2010_4_rob_40_49,
+         tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_all_rob_age<- "D:/1_migration/4_results_migrants/all/work/3_all_work_rob_age.txt"
+writeLines(rob_work_4_age, con = path_all_rob_age)
+```
+
+Elasticities - rob age
+
+```{r work_elast rob age}
+# 1991
+coef_30_39_lfp_1970_4 <- coef(work_1991_4_rob_30_39)["lfp_uf_30_49_1970"]
+elasticidade_30_39_lfp_1970_4 <- coef_30_39_lfp_1970_4 * (mean_lfp_1970 / mean_work_1991)
+
+coef_40_49_lfp_1970_4 <- coef(work_1991_4_rob_40_49)["lfp_uf_30_49_1970"]
+elasticidade_40_49_lfp_1970_4 <- coef_40_49_lfp_1970_4 * (mean_lfp_1970 / mean_work_1991)
+
+# 2000
+coef_30_39_lfp_1980_4 <- coef(work_2000_4_rob_30_39)["lfp_uf_30_49_1980"]
+elasticidade_30_39_lfp_1980_4 <- coef_30_39_lfp_1980_4 * (mean_lfp_1980 / mean_work_2000)
+
+coef_40_49_lfp_1980_4 <- coef(work_2000_4_rob_40_49)["lfp_uf_30_49_1980"]
+elasticidade_40_49_lfp_1980_4 <- coef_40_49_lfp_1980_4 * (mean_lfp_1980 / mean_work_2000)
+
+# 2010
+coef_30_39_lfp_1991_4 <- coef(work_2010_4_rob_30_39)["lfp_uf_30_49_1991"]
+elasticidade_30_39_lfp_1991_4 <- coef_30_39_lfp_1991_4 * (mean_lfp_1991 / mean_work_2010)
+
+coef_40_49_lfp_1991_4 <- coef(work_2010_4_rob_40_49)["lfp_uf_30_49_1991"]
+elasticidade_40_49_lfp_1991_4 <- coef_40_49_lfp_1991_4 * (mean_lfp_1991 / mean_work_2010)
+
+# table
+e_table_rob_age <- data.frame(
+  Model = paste0("Model ", 1:2),
+  Elasticity_1991 = c(elasticidade_30_39_lfp_1970_4, elasticidade_40_49_lfp_1970_4),
+  Elasticity_2000 = c(elasticidade_30_39_lfp_1980_4, elasticidade_40_49_lfp_1980_4),
+  Elasticity_2010 = c(elasticidade_30_39_lfp_1991_4, elasticidade_40_49_lfp_1991_4)
+)
+e_table_rob_age[, -1] <- apply(e_table_rob_age[, -1], 2, function(x) as.numeric(as.character(x)))
+
+e_table_rob_age[, -1] <- apply(e_table_rob_age[, -1], 2, function(x) format(round(x, 4), nsmall = 4))
+
+# Display the table
+print(e_table_rob_age)
+
+```
+
+> # Robustness - Area (Urban vs. Rural)
+
+# RW: Area (Urban vs. Rural)
+
+## 1991
+
+```{r work 1991 4 rob rural}
+work_1991_4_rob_rural <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp + children_under_5 |V1102, data = data_rural_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4_rob_rural)
+etable(work_1991_4_rob_rural, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 1991 4 rob urbana}
+work_1991_4_rob_urbana <- feols(ocupada_migrante_15~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp + children_under_5 |V1102, data = data_urbana_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(work_1991_4_rob_urbana)
+etable(work_1991_4_rob_urbana, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000 **ta estranho**
+
+```{r work 2000 4 rob rural}
+work_2000_4_rob_rural <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp + children_under_5|v0103, data = data_rural_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4_rob_rural)
+etable(work_2000_4_rob_rural, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2000 4 rob urbana}
+work_2000_4_rob_urbana <- feols(ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp + children_under_5|v0103, data = data_urbana_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(work_2000_4_rob_urbana)
+etable(work_2000_4_rob_urbana, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+
+```{r work 2010 4 rob rural}
+work_2010_4_rob_rural <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp +children_under_5|munic, data = data_rural_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4_rob_rural)
+etable(work_2010_4_rob_rural, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r work 2010 4 rob urbana}
+work_2010_4_rob_urbana <- feols(ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp +children_under_5|munic, data = data_urbana_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(work_2010_4_rob_urbana)
+etable(work_2010_4_rob_urbana, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r 1991 2000 2010 rob area}
+etable(
+  work_1991_4_rob_rural, work_1991_4_rob_urbana,
+  work_2000_4_rob_rural, work_2000_4_rob_urbana,
+  work_2010_4_rob_rural, work_2010_4_rob_urbana,
+  tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r 1991 2000 2010 area}
+rob_work_4_rob_area <- capture.output(
+  etable(
+  work_1991_4_rob_rural, work_1991_4_rob_urbana,
+  work_2000_4_rob_rural, work_2000_4_rob_urbana,
+  work_2010_4_rob_rural, work_2010_4_rob_urbana,
+         tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_all_rob_area<- "D:/1_migration/4_results_migrants/all/work/4_all_work_rob_area.txt"
+writeLines(rob_work_4_rob_area, con = path_all_rob_area)
+```
+
+Elasticities - rob area
+
+```{r work_elast rob state}
+mean_work_1991 <- weighted.mean(data_1991$ocupada_migrante_15, w = data_1991$V7301, na.rm = TRUE)
+mean_work_2000 <- weighted.mean(data_2000$ocupada_migrante_15, w = data_2000$P001, na.rm = TRUE)
+mean_work_2010 <- weighted.mean(data_2010$ocup_migrante, w = data_2010$peso_pess, na.rm = TRUE)
+
+# from lfp bases
+mean_lfp_1970 <- 0.189876402099703
+mean_lfp_1980 <- 0.299658860158131
+mean_lfp_1991 <- 0.304186291322243
+
+# 1991
+coef_r_lfp_1970_4 <- coef(work_1991_4_rob_rural)["lfp_uf_30_49_1970"]
+elasticidade_r_lfp_1970_4 <- coef_r_lfp_1970_4 * (mean_lfp_1970 / mean_work_1991)
+
+coef_u_lfp_1970_4 <- coef(work_1991_4_rob_urbana)["lfp_uf_30_49_1970"]
+elasticidade_u_lfp_1970_4 <- coef_u_lfp_1970_4 * (mean_lfp_1970 / mean_work_1991)
+
+# 2000
+coef_r_lfp_1980_4 <- coef(work_2000_4_rob_rural)["lfp_uf_30_49_1980"]
+elasticidade_r_lfp_1980_4 <- coef_r_lfp_1980_4 * (mean_lfp_1980 / mean_work_2000)
+
+coef_u_lfp_1980_4 <- coef(work_2000_4_rob_urbana)["lfp_uf_30_49_1980"]
+elasticidade_u_lfp_1980_4 <- coef_u_lfp_1980_4 * (mean_lfp_1980 / mean_work_2000)
+
+# 2010
+coef_r_lfp_1991_4 <- coef(work_2010_4_rob_rural)["lfp_uf_30_49_1991"]
+elasticidade_r_lfp_1991_4 <- coef_r_lfp_1991_4 * (mean_lfp_1991 / mean_work_2010)
+
+coef_u_lfp_1991_4 <- coef(work_2010_4_rob_urbana)["lfp_uf_30_49_1991"]
+elasticidade_u_lfp_1991_4 <- coef_u_lfp_1991_4 * (mean_lfp_1991 / mean_work_2010)
+
+# table
+e_table_rob_area <- data.frame(
+  Model = paste0("Model ", 1:2),
+  Elasticity_1991 = c(elasticidade_r_lfp_1970_4, elasticidade_u_lfp_1970_4),
+  Elasticity_2000 = c(elasticidade_r_lfp_1980_4, elasticidade_u_lfp_1980_4),
+  Elasticity_2010 = c(elasticidade_r_lfp_1991_4, elasticidade_u_lfp_1991_4)
+)
+
+# Display the table
+print(e_table_rob_area)
+
+```
+
+
+# RW: per state
+
+## 1991
+
+```{r work 1991 4 per state}
+# Lista de estados correspondentes aos códigos UFs
+uf_names <- c(
+  "Mato Grosso", "Acre", "São Paulo", "Mato Grosso do Sul", "Santa Catarina", "Pará",
+  "Amazonas", "Paraná", "Sergipe", "Rio de Janeiro", "Rio Grande do Sul", "Amapá",
+  "Tocantins", "Distrito Federal", "Goiás", "Piauí", "Minas Gerais", "Pernambuco",
+  "Rio Grande do Norte", "Espírito Santo", "Maranhão", "Rondônia", "Bahia",
+  "Ceará", "Paraíba", "Alagoas", "Roraima"
+)
+
+# Loop para rodar as regressões e imprimir resultados
+for (i in seq_along(ufs)) {
+  uf <- ufs[i]
+  uf_name <- uf_names[i]
+  
+  # Nome da base de dados dinamicamente
+  data_name <- paste0("data_1991_", uf)
+  
+  # Rodar a regressão
+  model_name <- paste0("work_1991_", uf, "_state")
+  assign(
+    model_name,
+    feols(
+      ocupada_migrante_15 ~ lfp_uf_30_49_1970 + fund_mulher + em_mulher + superior_mulher + 
+      fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + 
+      age_sp + age_squared_sp + children_under_5 | V1102,
+      data = get(data_name),
+      weights = ~V7301,
+      cluster = ~uf_nascim
+    )
+  )
+  
+  # Imprimir resultados com o nome do estado
+  cat("\n\n==========================\n")
+  cat("Results for State: ", uf_name, "\n")
+  cat("==========================\n")
+  print(summary(get(model_name)))
+  
+  # Gerar tabela em LaTeX com nome do estado
+  etable(
+    get(model_name), 
+    tex = TRUE, 
+    dict = var_labels, 
+    digits = "r4",
+    title = paste("Regression Results for", uf_name)
+  )
+}
+
+
+```
+
+## 2000
+
+```{r work 2000 4 per state}
+# Lista de estados correspondentes aos códigos UFs
+uf_names <- c(
+  "Mato Grosso", "Acre", "São Paulo", "Mato Grosso do Sul", "Santa Catarina", "Pará",
+  "Amazonas", "Paraná", "Sergipe", "Rio de Janeiro", "Rio Grande do Sul", "Amapá",
+  "Tocantins", "Distrito Federal", "Goiás", "Piauí", "Minas Gerais", "Pernambuco",
+  "Rio Grande do Norte", "Espírito Santo", "Maranhão", "Rondônia", "Bahia",
+  "Ceará", "Paraíba", "Alagoas", "Roraima"
+)
+
+# Loop para rodar as regressões e imprimir resultados
+for (i in seq_along(ufs)) {
+  uf <- ufs[i]
+  uf_name <- uf_names[i]
+  
+  # Nome da base de dados dinamicamente
+  data_name <- paste0("data_2000_", uf)
+  
+  # Rodar a regressão
+  model_name <- paste0("work_2000_", uf, "_state")
+  assign(
+    model_name,
+    feols(
+      ocupada_migrante_15 ~ lfp_uf_30_49_1980 + fund_mulher + em_mulher + superior_mulher + 
+      fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + 
+      age_sp + age_squared_sp + children_under_5 | v0103,
+      data = get(data_name),
+      weights = ~P001,
+      cluster = ~uf_nascim
+    )
+  )
+  
+  # Imprimir resultados com o nome do estado
+  cat("\n\n==========================\n")
+  cat("Results for State: ", uf_name, "\n")
+  cat("==========================\n")
+  print(summary(get(model_name)))
+  
+  # Gerar tabela em LaTeX com nome do estado
+  etable(
+    get(model_name), 
+    tex = TRUE, 
+    dict = var_labels, 
+    digits = "r4",
+    title = paste("Regression Results for", uf_name)
+  )
+}
+```
+
+## 2010
+
+```{r work 2010 4 per state}
+
+# Lista de estados correspondentes aos códigos UFs
+uf_names <- c(
+  "Mato Grosso", "Acre", "São Paulo", "Mato Grosso do Sul", "Santa Catarina", "Pará",
+  "Amazonas", "Paraná", "Sergipe", "Rio de Janeiro", "Rio Grande do Sul", "Amapá",
+  "Tocantins", "Distrito Federal", "Goiás", "Piauí", "Minas Gerais", "Pernambuco",
+  "Rio Grande do Norte", "Espírito Santo", "Maranhão", "Rondônia", "Bahia",
+  "Ceará", "Paraíba", "Alagoas", "Roraima"
+)
+
+# Loop para rodar as regressões e imprimir resultados
+for (i in seq_along(ufs)) {
+  uf <- ufs[i]
+  uf_name <- uf_names[i]
+  
+  # Nome da base de dados dinamicamente
+  data_name <- paste0("data_2010_", uf)
+  
+  # Rodar a regressão
+  model_name <- paste0("work_2010_", uf, "_state")
+  assign(
+    model_name,
+    feols(
+      ocup_migrante ~ lfp_uf_30_49_1991 + fund_mulher + em_mulher + superior_mulher + 
+      fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + 
+      age_sp + age_squared_sp + children_under_5 | munic,
+      data = get(data_name),
+      weights = ~peso_pess,
+      cluster = ~uf_nascim
+    )
+  )
+  
+  # Imprimir resultados com o nome do estado
+  cat("\n\n==========================\n")
+  cat("Results for State: ", uf_name, "\n")
+  cat("==========================\n")
+  print(summary(get(model_name)))
+  
+  # Gerar tabela em LaTeX com nome do estado
+  etable(
+    get(model_name), 
+    tex = TRUE, 
+    dict = var_labels, 
+    digits = "r4",
+    title = paste("Regression Results for", uf_name)
+  )
+}
+```
+
+#### altogether
+
+```{r 1991 2000 2010 rob age}
+etable(
+  work_1991_4_rob_30_39, work_1991_4_rob_40_49, 
+  work_2000_4_rob_30_39,work_2000_4_rob_40_49,
+  work_2010_4_rob_30_39, work_2010_4_rob_40_49,
+  tex = TRUE, dict = var_labels, digits = "r4"
+  )
+```
+
+#### altogether
+
+```{r 1991 2000 2010 rob state}
+rob_work_4_age <- capture.output(
+  etable(
+  work_1991_4_rob_30_39, work_1991_4_rob_40_49, 
+  work_2000_4_rob_30_39,work_2000_4_rob_40_49,
+  work_2010_4_rob_30_39, work_2010_4_rob_40_49,
+         tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_all_rob_age<- "D:/1_migration/4_results_migrants/all/work/3_all_work_rob_age.txt"
+writeLines(rob_work_4_age, con = path_all_rob_age)
+```
+
+Elasticities - rob age
+
+```{r work_elast rob age}
+# 1991
+coef_30_39_lfp_1970_4 <- coef(work_1991_4_rob_30_39)["lfp_uf_30_49_1970"]
+elasticidade_30_39_lfp_1970_4 <- coef_30_39_lfp_1970_4 * (mean_lfp_1970 / mean_work_1991)
+
+coef_40_49_lfp_1970_4 <- coef(work_1991_4_rob_40_49)["lfp_uf_30_49_1970"]
+elasticidade_40_49_lfp_1970_4 <- coef_40_49_lfp_1970_4 * (mean_lfp_1970 / mean_work_1991)
+
+# 2000
+coef_30_39_lfp_1980_4 <- coef(work_2000_4_rob_30_39)["lfp_uf_30_49_1980"]
+elasticidade_30_39_lfp_1980_4 <- coef_30_39_lfp_1980_4 * (mean_lfp_1980 / mean_work_2000)
+
+coef_40_49_lfp_1980_4 <- coef(work_2000_4_rob_40_49)["lfp_uf_30_49_1980"]
+elasticidade_40_49_lfp_1980_4 <- coef_40_49_lfp_1980_4 * (mean_lfp_1980 / mean_work_2000)
+
+# 2010
+coef_30_39_lfp_1991_4 <- coef(work_2010_4_rob_30_39)["lfp_uf_30_49_1991"]
+elasticidade_30_39_lfp_1991_4 <- coef_30_39_lfp_1991_4 * (mean_lfp_1991 / mean_work_2010)
+
+coef_40_49_lfp_1991_4 <- coef(work_2010_4_rob_40_49)["lfp_uf_30_49_1991"]
+elasticidade_40_49_lfp_1991_4 <- coef_40_49_lfp_1991_4 * (mean_lfp_1991 / mean_work_2010)
+
+# table
+e_table_rob_age <- data.frame(
+  Model = paste0("Model ", 1:2),
+  Elasticity_1991 = c(elasticidade_30_39_lfp_1970_4, elasticidade_40_49_lfp_1970_4),
+  Elasticity_2000 = c(elasticidade_30_39_lfp_1980_4, elasticidade_40_49_lfp_1980_4),
+  Elasticity_2010 = c(elasticidade_30_39_lfp_1991_4, elasticidade_40_49_lfp_1991_4)
+)
+e_table_rob_age[, -1] <- apply(e_table_rob_age[, -1], 2, function(x) as.numeric(as.character(x)))
+
+e_table_rob_age[, -1] <- apply(e_table_rob_age[, -1], 2, function(x) format(round(x, 4), nsmall = 4))
+
+# Display the table
+print(e_table_rob_age)
+
+```
+
+
+> # Avaliando o impacto da tfr da UF de origem sobre o número de filhos da mulher migrante-------------------------------------
+
+# CHILDREN
+
+### 1991
+
+#### only tfr 1991
+
+```{r children 1991 1}
+children_1991_1 <- feols(children~ tfr_1970+ age_fem + age_squared_fem + age_sp + age_squared_sp + age_squared_sp|V1102, data = data_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_1)
+etable(children_1991_1, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### tfr 1991 + woman's schooling
+
+```{r children 1991 2}
+children_1991_2 <- feols(children~ tfr_1970 + fund_mulher + em_mulher + superior_mulher+ age_fem + age_squared_fem + age_sp + age_squared_sp + age_squared_sp|V1102, data = data_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_2)
+etable(children_1991_2, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### tfr 1991 + spouse's schooling
+
+```{r children 1991 5}
+children_1991_5 <- feols(children~ tfr_1970 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp |V1102, data = data_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_5)
+etable(children_1991_5, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### everything
+
+```{r children 1991 4}
+children_1991_4 <- feols(children~ tfr_1970+fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + age_fem + age_squared_fem + age_sp + age_squared_sp+income_sp_raw|V1102, data = data_inc_educ_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4)
+etable(children_1991_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r c 1991}
+c_1991_main <- capture.output(
+  etable(
+  children_1991_1, children_1991_2, children_1991_5, children_1991_4,
+         tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_c_1991<- "D:/1_migration/4_results_migrants/1991_1970/1_c_1991_main.txt"
+writeLines(c_1991_main, con = path_c_1991)
+```
+
+### 2000
+
+#### only tfr 1980
+
+```{r children 1980 1}
+children_2000_1 <- feols(children ~ tfr_1980 + age_fem + age_squared_fem + age_sp + age_squared_sp|v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_1)
+etable(children_2000_1, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### tfr 1980 + woman's schooling
+
+```{r children 1980 2}
+children_2000_2 <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher+ age_fem + age_squared_fem + age_sp + age_squared_sp|v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_2)
+etable(children_2000_2, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### tfr 1980 + spouse's schooling
+
+```{r children 1980 5}
+children_2000_5 <- feols(children ~ tfr_1980 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp|v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_5)
+etable(children_2000_5, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### everything
+
+```{r children 1980 4}
+children_2000_4 <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp|v0103, data = data_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4)
+etable(children_2000_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r c 2000}
+c_2000_main <- capture.output(
+  etable(
+  children_2000_1, children_2000_2, children_2000_5, children_2000_4,
+         tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_c_2000<- "D:/1_migration/4_results_migrants/2000_1980/1_c_2000_main.txt"
+writeLines(c_2000_main, con = path_c_2000)
+```
+
+### 2010
+
+#### only tfr 2010
+
+```{r children 2010 1}
+children_2010_1 <- feols(children ~ tfr_1991 + age_fem + age_squared_fem + age_sp + age_squared_sp |munic, data = data_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_1)
+etable(children_2010_1, tex = TRUE, dict = var_labels, digits = "r4")
+
+```
+
+#### tfr 2010 + woman's schooling
+
+```{r children 2010 2}
+children_2010_2 <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ age_fem + age_squared_fem + age_sp + age_squared_sp |munic, data = data_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_2)
+etable(children_2010_2, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### tfr 2010 + spouse's schooling
+
+```{r children 2010 5}
+children_2010_5 <- feols(children ~ tfr_1991 + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp |munic, data = data_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_5)
+etable(children_2010_5, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### everything
+
+```{r children 2010 4}
+children_2010_4 <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp |munic, data = data_inc_educ_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4)
+etable(children_2010_4, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r c 2010}
+c_2010_main <- capture.output(
+  etable(
+  children_2010_1, children_2010_2, children_2010_5, children_2010_4,
+         tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_c_2010<- "D:/1_migration/4_results_migrants/2010_1991/1_c_2010_main.txt"
+writeLines(c_2010_main, con = path_c_2010)
+```
+
+#### altogether
+
+```{r c all}
+c_all_main <- capture.output(
+  etable(
+  children_1991_5, children_1991_4, children_2000_5, children_2000_4, children_2010_5, children_2010_4,
+         tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_c_all<- "D:/1_migration/4_results_migrants/all/children/1_c_all_main.txt"
+writeLines(c_all_main, con = path_c_all)
+```
+
+#### main calculations on paper
+
+```{r calc children_hc}
+# anos estudo
+# 1991
+coef_1991_c_4 <- coef(children_1991_4)["tfr_1970"]
+coef1_1991_c_4 <- coef_1991_c_4 * (1.38) #aumento no numero de criancas
+coef1_1991_c_4
+part_1991_c_4 <- coef1_1991_c_4 /(0.52) #xx% of the sd of number of children across states of birth
+part_1991_c_4
+
+# 2000
+coef_2000_c_4 <- coef(children_2000_4_hc)["anos_estudo_1980_30_60"]
+coef1_2000_c_4 <- coef_2000_c_4 * (1.3) #aumento no numero de criancas
+coef1_2000_c_4
+part_2000_c_4 <- coef1_2000_c_4 /(0.35) #xx% of the sd of number of children across states of birth
+part_2000_c_4
+
+# 2010
+coef_2010_c_4 <- coef(children_2010_4_hc)["anos_estudo_1991_30_60"]
+coef1_2010_c_4 <- coef_2010_c_4 * (0.78) #aumento no numero de criancas
+coef1_2010_c_4
+part_2010_c_4 <- coef1_2010_c_4 /(0.19) #xx% of the sd of number of children across states of birth
+part_2010_c_4
+
+# table: all
+coef_table_children <- data.frame(
+  Model = paste0("Model ", 1:2),
+  Elasticity_1991 = c(coef1_1991_c_4, part_1991_c_4),
+  Elasticity_2000 = c(coef1_2000_c_4, part_2000_c_4),
+  Elasticity_2010 = c(coef1_2010_c_4, part_2010_c_4)
+)
+coef_table_children[, -1] <- apply(coef_table_children[, -1], 2, function(x) as.numeric(as.character(x)))
+
+coef_table_children[, -1] <- apply(coef_table_children[, -1], 2, function(x) format(round(x, 4), nsmall = 4))
+
+print(coef_table_children)
+```
+
+
+
+
+> # Robustness - Human Capital - children
+
+# RW:Human Capital
+
+# 1991
+
+```{r children 1991 4 rob hc}
+children_1991_4_hc <- feols(children~ anos_estudo_1970_30_60+tfr_1970+fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + age_fem + age_squared_fem + age_sp + age_squared_sp+income_sp_raw|V1102, data = data_inc_educ_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4_hc)
+etable(children_1991_4_hc, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+# 2000
+```{r children 2000 4 rob hc}
+children_2000_4_hc <- feols(children ~ anos_estudo_1980_30_60+tfr_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp |v0103, data = data_inc_educ_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4_hc)
+etable(children_2000_4_hc, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+# 2010
+```{r children 2010 4 rob hc}
+children_2010_4_hc <- feols(children ~ anos_estudo_1991_30_60+tfr_1991+fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp|munic, data = data_inc_educ_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4_hc)
+etable(children_2010_4_hc, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r c rob hc}
+c_all_hc <- capture.output(
+  etable(
+  children_1991_4_hc,
+  children_2000_4_hc,
+  children_2010_4_hc,
+    tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_c_all<- "D:/1_migration/4_results_migrants/all/children/1_c_all_hc.txt"
+writeLines(c_all_hc, con = path_c_all)
+```
+
+Final calculations:
+
+```{r calc children_hc}
+# anos estudo
+# 1991
+coef_1991_c_4 <- coef(children_1991_4_hc)["anos_estudo_1970_30_60"]
+coef1_1991_c_4 <- coef_1991_c_4 * (1.38) #aumento no numero de criancas
+coef1_1991_c_4
+part_1991_c_4 <- coef1_1991_c_4 /(0.52) #xx% of the sd of number of children across states of birth
+part_1991_c_4
+
+# 2000
+coef_2000_c_4 <- coef(children_2000_4_hc)["anos_estudo_1980_30_60"]
+coef1_2000_c_4 <- coef_2000_c_4 * (1.3) #aumento no numero de criancas
+coef1_2000_c_4
+part_2000_c_4 <- coef1_2000_c_4 /(0.35) #xx% of the sd of number of children across states of birth
+part_2000_c_4
+
+# 2010
+coef_2010_c_4 <- coef(children_2010_4_hc)["anos_estudo_1991_30_60"]
+coef1_2010_c_4 <- coef_2010_c_4 * (0.78) #aumento no numero de criancas
+coef1_2010_c_4
+part_2010_c_4 <- coef1_2010_c_4 /(0.19) #xx% of the sd of number of children across states of birth
+part_2010_c_4
+
+# table: all
+coef_table_children <- data.frame(
+  Model = paste0("Model ", 1:2),
+  Elasticity_1991 = c(coef1_1991_c_4, part_1991_c_4),
+  Elasticity_2000 = c(coef1_2000_c_4, part_2000_c_4),
+  Elasticity_2010 = c(coef1_2010_c_4, part_2010_c_4)
+)
+coef_table_children[, -1] <- apply(coef_table_children[, -1], 2, function(x) as.numeric(as.character(x)))
+
+coef_table_children[, -1] <- apply(coef_table_children[, -1], 2, function(x) format(round(x, 4), nsmall = 4))
+
+print(coef_table_children)
+```
+> # Robustness - Income 20 years ago - children
+
+# RW:Income 20 years ago
+
+# 1991
+
+```{r children 1991 4 rob hc}
+children_1991_4_s_tfr <- feols(children~ salario_1970_defl_para_2010+tfr_1970+fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + age_fem + age_squared_fem + age_sp + age_squared_sp+income_sp_raw|V1102, data = data_inc_educ_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4_s_tfr)
+etable(children_1991_4_s_tfr, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+# 2000
+
+```{r children 2000 4 rob hc}
+children_2000_4_s_tfr <- feols(children ~ salario_1980_defl_para_2010+tfr_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp |v0103, data = data_inc_educ_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4_s_tfr)
+etable(children_2000_4_s_tfr, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+# 2010
+```{r children 2010 4 rob hc}
+children_2010_4_s_tfr <- feols(children ~ salario_1991_defl_para_2010+tfr_1991 +fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp|munic, data = data_inc_educ_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4_s_tfr)
+etable(children_2010_4_s_tfr, tex = TRUE, dict = var_labels, digits = "r4")
+```
+#### altogether
+
+```{r 1991 2000 2010 income children}
+etable(
+  children_1991_4_s_tfr,
+  children_2000_4_s_tfr,
+  children_2010_4_s_tfr,
+  
+  tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r c rob income}
+c_all_race <- capture.output(
+  etable(
+  children_1991_4_s_tfr,
+  children_2000_4_s_tfr,
+  children_2010_4_s_tfr,
+    tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_c_all<- "D:/1_migration/4_results_migrants/all/children/1_c_all_income.txt"
+writeLines(c_all_race, con = path_c_all)
+```
+
+> # Robustness - Race - children
+
+# RW: Race
+
+# 1991
+
+```{r children 1991 4 white}
+children_1991_4_white <- feols(children~ tfr_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp  |V1102, data = data_white_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4_white)
+etable(children_1991_4_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 1991 4 black/brown}
+children_1991_4_black <- feols(children~ tfr_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp  |V1102, data = data_black_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4_black)
+etable(children_1991_4_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+
+```{r children 2000 4 white}
+children_2000_4_white <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp |v0103, data = data_white_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4_white)
+etable(children_2000_4_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 2000 4 black/brown}
+children_2000_4_black <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp |v0103, data = data_black_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4_black)
+etable(children_2000_4_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+
+```{r children 2010 4 white}
+children_2010_4_white <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp|munic, data = data_white_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4_white)
+etable(children_2010_4_white, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 2010 4 black/brown}
+children_2010_4_black <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp|munic, data = data_black_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4_black)
+etable(children_2010_4_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r 1991 2000 2010 race children}
+etable(children_1991_4_white, children_1991_4_black, children_2000_4_white, children_2000_4_black, children_2010_4_white, children_2010_4_black, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r c all}
+c_all_race <- capture.output(
+  etable(
+children_1991_4_white, children_1991_4_black, children_2000_4_white, children_2000_4_black, children_2010_4_white, children_2010_4_black,
+    tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_c_all<- "D:/1_migration/4_results_migrants/all/children/1_c_all_race.txt"
+writeLines(c_all_race, con = path_c_all)
+```
+
+> # Robustness - children: state
+
+# RC: outlier states
+
+Tira UF com maior e menor TFR em 1970, 80 e 91.
+
+With female education levels.
+
+# 1991
+
+```{r children 1991 4 rob higher tfr}
+children_1991_4_rob_higher_tfr <- feols(children~ tfr_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp  |V1102, data = data_without_13_33_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4_rob_higher_tfr)
+etable(children_1991_4_rob_higher_tfr, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+
+```{r children 2000 4 rob higher tfr}
+children_2000_4_rob_higher_tfr <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp |v0103, data = data_without_21_33_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4_rob_higher_tfr)
+etable(children_2000_4_rob_higher_tfr, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+
+```{r children 2010 4 rob higher lfp}
+children_2010_4_rob_higher_tfr <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp |munic, data = data_without_16_33_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4_rob_higher_tfr)
+etable(children_2010_4_rob_higher_tfr, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r c all rob state}
+c_all_rob_state <- capture.output(
+  etable(
+  children_1991_4_rob_higher_tfr,
+  children_2000_4_rob_higher_tfr,
+  children_2010_4_rob_higher_tfr,
+    tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_c_all<- "D:/1_migration/4_results_migrants/all/children/1_c_all_state.txt"
+writeLines(c_all_rob_state, con = path_c_all)
+```
+
+> # Robustness - children female age
+
+# RW: age 30-39
+
+## 1991
+
+```{r children 1991 4 age 30-39}
+children_1991_4_rob_30_39 <- feols(children~ tfr_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp  |V1102, data = data_30_39_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4_rob_30_39)
+etable(children_1991_4_rob_30_39, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+
+```{r children 2000 4 age 30-39}
+children_2000_4_rob_30_39 <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp |v0103, data = data_30_39_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4_rob_30_39)
+etable(children_2000_4_rob_30_39, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+
+```{r children 2010 4 age 30-39}
+children_2010_4_rob_30_39 <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp |munic, data = data_30_39_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4_rob_30_39)
+etable(children_2010_4_rob_30_39, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+# RW: age 40-49
+## 1991
+
+```{r children 1991 4 age 40-49}
+children_1991_4_rob_40_49 <- feols(children~ tfr_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp  |V1102, data = data_40_49_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4_rob_40_49)
+etable(children_1991_4_rob_40_49, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+
+```{r children 2000 4 age 40-49}
+children_2000_4_rob_40_49 <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp |v0103, data = data_40_49_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4_rob_40_49)
+etable(children_2000_4_rob_40_49, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+
+```{r children 2010 4 age 40-49}
+children_2010_4_rob_40_49 <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp |munic, data = data_40_49_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4_rob_40_49)
+etable(children_2010_4_rob_40_49, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r c all rob age}
+c_all_rob_age <- capture.output(
+  etable(
+  children_1991_4_rob_30_39, children_1991_4_rob_40_49,
+  children_2000_4_rob_30_39, children_2000_4_rob_40_49,
+  children_2010_4_rob_30_39, children_2010_4_rob_40_49,
+    tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_c_all<- "D:/1_migration/4_results_migrants/all/children/1_c_all_age.txt"
+writeLines(c_all_rob_age, con = path_c_all)
+```
+
+```{r 1991 2000 2010 rob age}
+etable(
+  children_1991_4_rob_40_49, children_2000_4_rob_40_49, children_2010_4_rob_40_49,
+  children_1991_4_rob_30_39, children_2000_4_rob_30_39, children_2010_4_rob_30_39,
+  tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+> # Robustness - Area (Urban vs. Rural)
+
+# RW: Area (Urban vs. Rural)
+
+## 1991
+
+```{r children 1991 4 rob rural}
+children_1991_4_rob_rural <- feols(children ~ tfr_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp |V1102, data = data_rural_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4_rob_rural)
+etable(children_1991_4_rob_rural, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 1991 4 rob urbana}
+children_1991_4_rob_urbana <- feols(children ~ tfr_1970 + fund_mulher + em_mulher + superior_mulher + fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp|V1102, data = data_urbana_1991, weights = ~V7301, cluster = ~uf_nascim)
+summary(children_1991_4_rob_urbana)
+etable(children_1991_4_rob_urbana, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2000
+
+```{r children 2000 4 rob rural}
+children_2000_4_rob_rural <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp|v0103, data = data_rural_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4_rob_rural)
+etable(children_2000_4_rob_rural, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 2000 4 rob urbana}
+children_2000_4_rob_urbana <- feols(children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem+ age_squared_fem+ age_sp + age_squared_sp|v0103, data = data_urbana_2000, weights = ~P001, cluster = ~uf_nascim)
+summary(children_2000_4_rob_urbana)
+etable(children_2000_4_rob_urbana, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+## 2010
+
+```{r children 2010 4 rob rural}
+children_2010_4_rob_rural <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp|munic, data = data_rural_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4_rob_rural)
+etable(children_2010_4_rob_rural, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+```{r children 2010 4 rob urbana}
+children_2010_4_rob_urbana <- feols(children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher+ fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + age_sp + age_squared_sp|munic, data = data_urbana_2010, weights = ~peso_pess, cluster = ~uf_nascim)
+summary(children_2010_4_rob_urbana)
+etable(children_2010_4_rob_urbana, tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r 1991 2000 2010 rob area}
+etable(
+  children_1991_4_rob_rural, children_1991_4_rob_urbana,
+  children_2000_4_rob_rural, children_2000_4_rob_urbana,
+  children_2010_4_rob_rural, children_2010_4_rob_urbana,
+  tex = TRUE, dict = var_labels, digits = "r4")
+```
+
+#### altogether
+
+```{r 1991 2000 2010 area}
+rob_children_4_rob_area <- capture.output(
+  etable(
+  children_1991_4_rob_rural, children_1991_4_rob_urbana,
+  children_2000_4_rob_rural, children_2000_4_rob_urbana,
+  children_2010_4_rob_rural, children_2010_4_rob_urbana,
+         tex = TRUE, dict = var_labels, digits = "r4")
+)
+path_all_rob_area<- "D:/1_migration/4_results_migrants/all/children/4_all_children_rob_area.txt"
+writeLines(rob_children_4_rob_area, con = path_all_rob_area)
+```
+
+# RC: per state
+
+## 1991
+
+```{r c 1991 4 per state}
+# Lista de estados correspondentes aos códigos UFs
+uf_names <- c(
+  "Mato Grosso", "Acre", "São Paulo", "Mato Grosso do Sul", "Santa Catarina", "Pará",
+  "Amazonas", "Paraná", "Sergipe", "Rio de Janeiro", "Rio Grande do Sul", "Amapá",
+  "Tocantins", "Distrito Federal", "Goiás", "Piauí", "Minas Gerais", "Pernambuco",
+  "Rio Grande do Norte", "Espírito Santo", "Maranhão", "Rondônia", "Bahia",
+  "Ceará", "Paraíba", "Alagoas", "Roraima"
+)
+
+# Loop para rodar as regressões e imprimir resultados
+for (i in seq_along(ufs)) {
+  uf <- ufs[i]
+  uf_name <- uf_names[i]
+  
+  # Nome da base de dados dinamicamente
+  data_name <- paste0("data_1991_", uf)
+  
+  # Rodar a regressão
+  model_name <- paste0("work_1991_", uf, "_state")
+  assign(
+    model_name,
+    feols(
+      children~ tfr_1970 + fund_mulher + em_mulher + superior_mulher + 
+      fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + 
+      age_sp + age_squared_sp + children_under_5 | V1102,
+      data = get(data_name),
+      weights = ~V7301,
+      cluster = ~uf_nascim
+      
+    )
+  )
+  
+  # Imprimir resultados com o nome do estado
+  cat("\n\n==========================\n")
+  cat("Results for State: ", uf_name, "\n")
+  cat("==========================\n")
+  print(summary(get(model_name)))
+  
+  # Gerar tabela em LaTeX com nome do estado
+  etable(
+    get(model_name), 
+    tex = TRUE, 
+    dict = var_labels, 
+    digits = "r4",
+    title = paste("Regression Results for", uf_name)
+  )
+}
+
+
+```
+
+## 2000
+
+```{r work 2000 4 per state}
+# Lista de estados correspondentes aos códigos UFs
+uf_names <- c(
+  "Mato Grosso", "Acre", "São Paulo", "Mato Grosso do Sul", "Santa Catarina", "Pará",
+  "Amazonas", "Paraná", "Sergipe", "Rio de Janeiro", "Rio Grande do Sul", "Amapá",
+  "Tocantins", "Distrito Federal", "Goiás", "Piauí", "Minas Gerais", "Pernambuco",
+  "Rio Grande do Norte", "Espírito Santo", "Maranhão", "Rondônia", "Bahia",
+  "Ceará", "Paraíba", "Alagoas", "Roraima"
+)
+
+# Loop para rodar as regressões e imprimir resultados
+for (i in seq_along(ufs)) {
+  uf <- ufs[i]
+  uf_name <- uf_names[i]
+  
+  # Nome da base de dados dinamicamente
+  data_name <- paste0("data_2000_", uf)
+  
+  # Rodar a regressão
+  model_name <- paste0("work_2000_", uf, "_state")
+  assign(
+    model_name,
+    feols(
+      children ~ tfr_1980 + fund_mulher + em_mulher + superior_mulher + 
+      fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + 
+      age_sp + age_squared_sp + children_under_5 | v0103,
+      data = get(data_name),
+      weights = ~P001,
+      cluster = ~uf_nascim
+    )
+  )
+  
+  # Imprimir resultados com o nome do estado
+  cat("\n\n==========================\n")
+  cat("Results for State: ", uf_name, "\n")
+  cat("==========================\n")
+  print(summary(get(model_name)))
+  
+  # Gerar tabela em LaTeX com nome do estado
+  etable(
+    get(model_name), 
+    tex = TRUE, 
+    dict = var_labels, 
+    digits = "r4",
+    title = paste("Regression Results for", uf_name)
+  )
+}
+```
+
+## 2010
+
+```{r work 2010 4 per state}
+
+# Lista de estados correspondentes aos códigos UFs
+uf_names <- c(
+  "Mato Grosso", "Acre", "São Paulo", "Mato Grosso do Sul", "Santa Catarina", "Pará",
+  "Amazonas", "Paraná", "Sergipe", "Rio de Janeiro", "Rio Grande do Sul", "Amapá",
+  "Tocantins", "Distrito Federal", "Goiás", "Piauí", "Minas Gerais", "Pernambuco",
+  "Rio Grande do Norte", "Espírito Santo", "Maranhão", "Rondônia", "Bahia",
+  "Ceará", "Paraíba", "Alagoas", "Roraima"
+)
+
+# Loop para rodar as regressões e imprimir resultados
+for (i in seq_along(ufs)) {
+  uf <- ufs[i]
+  uf_name <- uf_names[i]
+  
+  # Nome da base de dados dinamicamente
+  data_name <- paste0("data_2010_", uf)
+  
+  # Rodar a regressão
+  model_name <- paste0("work_2010_", uf, "_state")
+  assign(
+    model_name,
+    feols(
+      children ~ tfr_1991 + fund_mulher + em_mulher + superior_mulher + 
+      fund_homem + em_homem + superior_homem + income_sp_raw + age_fem + age_squared_fem + 
+      age_sp + age_squared_sp + children_under_5 | munic,
+      data = get(data_name),
+      weights = ~peso_pess,
+      cluster = ~uf_nascim
+    )
+  )
+  
+  # Imprimir resultados com o nome do estado
+  cat("\n\n==========================\n")
+  cat("Results for State: ", uf_name, "\n")
+  cat("==========================\n")
+  print(summary(get(model_name)))
+  
+  # Gerar tabela em LaTeX com nome do estado
+  etable(
+    get(model_name), 
+    tex = TRUE, 
+    dict = var_labels, 
+    digits = "r4",
+    title = paste("Regression Results for", uf_name)
+  )
+}
+```
+
+Quais são os estados que receberam mais imigrantes e os que mandaram mais pessoas?
+
+```{r emigracao e imigracao}
+# Estados com mais ocorrências em uf_nascim ponderados por peso
+mais_uf_nascim_ponderado <- data_1991 %>%
+  group_by(uf_nascim) %>%
+  summarise(total_ponderado = sum(V7301, na.rm = TRUE)) %>%
+  arrange(desc(total_ponderado))
+
+# Estados com mais ocorrências em UF ponderados por peso
+mais_UF_ponderado <- data_1991 %>%
+  group_by(UF) %>%
+  summarise(total_ponderado = sum(V7301, na.rm = TRUE)) %>%
+  arrange(desc(total_ponderado))
+
+# Visualizar os resultados
+print("Estados com mais ocorrências em uf_nascim ponderados por peso:")
+print(mais_uf_nascim_ponderado)
+
+print("Estados com mais ocorrências em UF ponderados por peso:")
+print(mais_UF_ponderado)
+```
+
+> ## Summary statistics
+
+## Summary statistics
+
+### 1991
+```{r descriptive statistics 1991}
+
+### 1991
+
+state_names <- c(
+  "11" = "Rondônia", 
+  "12" = "Acre", 
+  "13" = "Amazonas", 
+  "14" = "Roraima", 
+  "15" = "Pará", 
+  "16" = "Amapá", 
+  "17" = "Tocantins", 
+  "21" = "Maranhão",
+  "22" = "Piauí", 
+  "23" = "Ceará", 
+  "24" = "Rio Grande do Norte", 
+  "25" = "Paraíba", 
+  "26" = "Pernambuco", 
+  "27" = "Alagoas", 
+  "28" = "Sergipe", 
+  "29" = "Bahia",
+  "31" = "Minas Gerais", 
+  "32" = "Espírito Santo", 
+  "33" = "Rio de Janeiro", 
+  "35" = "São Paulo", 
+  "41" = "Paraná", 
+  "42" = "Santa Catarina", 
+  "43" = "Rio Grande do Sul", 
+  "50" = "Mato Grosso do Sul", 
+  "51" = "Mato Grosso", 
+  "52" = "Goiás", 
+  "53" = "Distrito Federal"
+)
+
+
+# Step 1: Calculate statistics for each UF
+estatisticas_descritivas_30_49_1991 <- data_1991 %>%
+  group_by(uf_nascim) %>%
+  summarise(
+    # Total weighted observations (sum of weights)
+    Observations = round(sum(V7301, na.rm = TRUE), 0),
+
+    # Weighted mean and standard deviation for occupation
+    Employed_Migrant = weighted.mean(ocupada_migrante_15, w = V7301, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for children
+    Children = weighted.mean(children, w = V7301, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for labor force participation (LFP)
+    LFP_1970 = weighted.mean(lfp_uf_30_49_1970, w = V7301, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for total fertility rate (TFR)
+    TFR_1970 = weighted.mean(tfr_1970, w = V7301, na.rm = TRUE),
+  )
+
+# Step 2: Rename UF codes to state names
+estatisticas_descritivas_30_49_1991$uf_nascim <- state_names[as.character(estatisticas_descritivas_30_49_1991$uf_nascim)]
+colnames(estatisticas_descritivas_30_49_1991)[1] <- "State"  # Rename the 'uf_nascim' column to 'State'
+
+# Step 3: Calculate the overall mean and standard deviation for each metric and add as rows
+mean_row <- estatisticas_descritivas_30_49_1991 %>%
+  summarise(
+    State = "Mean",
+    Observations = round(mean(Observations, na.rm = TRUE), 0),
+    Employed_Migrant = mean(Employed_Migrant, na.rm = TRUE),
+    Children = mean(Children, na.rm = TRUE),
+    LFP_1970 = mean(LFP_1970, na.rm = TRUE),
+    TFR_1970 = mean(TFR_1970, na.rm = TRUE),
+  )
+
+sd_row <- estatisticas_descritivas_30_49_1991 %>%
+  summarise(
+    State = "SD",
+    Observations = sd(Observations, na.rm = TRUE),
+    Employed_Migrant = sd(Employed_Migrant, na.rm = TRUE),
+    Children = sd(Children, na.rm = TRUE),
+    LFP_1970 = sd(LFP_1970, na.rm = TRUE),
+    TFR_1970 = sd(TFR_1970, na.rm = TRUE),
+  )
+
+# Combine the main data with the summary rows
+estatisticas_descritivas_final <- bind_rows(estatisticas_descritivas_30_49_1991, mean_row, sd_row)
+
+#estatisticas_descritivas_final <- estatisticas_descritivas_final %>%
+  #filter(!State %in% c("Rondônia", "Acre", "Roraima", "Amapá", "Tocantins"))
+
+# Step 4: Generate LaTeX output
+latex_table <- xtable(estatisticas_descritivas_final)
+print(latex_table, type = "latex", include.rownames = FALSE)
+```
+
+### 1991 - full
+```{r descriptive statistics 1991 - full}
+
+### 1991
+
+state_names <- c(
+  "11" = "Rondônia", 
+  "12" = "Acre", 
+  "13" = "Amazonas", 
+  "14" = "Roraima", 
+  "15" = "Pará", 
+  "16" = "Amapá", 
+  "17" = "Tocantins", 
+  "21" = "Maranhão",
+  "22" = "Piauí", 
+  "23" = "Ceará", 
+  "24" = "Rio Grande do Norte", 
+  "25" = "Paraíba", 
+  "26" = "Pernambuco", 
+  "27" = "Alagoas", 
+  "28" = "Sergipe", 
+  "29" = "Bahia",
+  "31" = "Minas Gerais", 
+  "32" = "Espírito Santo", 
+  "33" = "Rio de Janeiro", 
+  "35" = "São Paulo", 
+  "41" = "Paraná", 
+  "42" = "Santa Catarina", 
+  "43" = "Rio Grande do Sul", 
+  "50" = "Mato Grosso do Sul", 
+  "51" = "Mato Grosso", 
+  "52" = "Goiás", 
+  "53" = "Distrito Federal"
+)
+
+
+# Step 1: Calculate statistics for each UF
+estatisticas_descritivas_30_49_1991_full <- data_1991 %>%
+  group_by(uf_nascim) %>%
+  summarise(
+    # Total weighted observations (sum of weights)
+    Observations = round(sum(V7301, na.rm = TRUE), 0),
+
+    # Average age
+    Migrant_Woman_Age = weighted.mean(age_fem, w = V7301, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for occupation
+    Employed_Migrant = weighted.mean(ocupada_migrante_15, w = V7301, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for children
+    Children = weighted.mean(children, w = V7301, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for labor force participation (LFP)
+    LFP_1970 = weighted.mean(lfp_uf_30_49_1970, w = V7301, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for total fertility rate (TFR)
+    TFR_1970 = weighted.mean(tfr_1970, w = V7301, na.rm = TRUE),
+  )
+
+# Step 2: Rename UF codes to state names
+estatisticas_descritivas_30_49_1991_full$uf_nascim <- state_names[as.character(estatisticas_descritivas_30_49_1991_full$uf_nascim)]
+colnames(estatisticas_descritivas_30_49_1991_full)[1] <- "State"  # Rename the 'uf_nascim' column to 'State'
+
+# Step 3: Calculate the overall mean and standard deviation for each metric and add as rows
+mean_row <- estatisticas_descritivas_30_49_1991_full %>%
+  summarise(
+    State = "Mean",
+    Observations = round(mean(Observations, na.rm = TRUE), 0),
+    Migrant_Woman_Age = mean(Migrant_Woman_Age, na.rm = TRUE),
+    Employed_Migrant = mean(Employed_Migrant, na.rm = TRUE),
+    Children = mean(Children, na.rm = TRUE),
+    LFP_1970 = mean(LFP_1970, na.rm = TRUE),
+    TFR_1970 = mean(TFR_1970, na.rm = TRUE),
+  )
+
+sd_row <- estatisticas_descritivas_30_49_1991_full %>%
+  summarise(
+    State = "SD",
+    Observations = sd(Observations, na.rm = TRUE),
+    Migrant_Woman_Age = sd(Migrant_Woman_Age, na.rm = TRUE),
+    Employed_Migrant = sd(Employed_Migrant, na.rm = TRUE),
+    Children = sd(Children, na.rm = TRUE),
+    LFP_1970 = sd(LFP_1970, na.rm = TRUE),
+    TFR_1970 = sd(TFR_1970, na.rm = TRUE),
+  )
+
+# Combine the main data with the summary rows
+estatisticas_descritivas_final_1991_full <- bind_rows(estatisticas_descritivas_30_49_1991_full, mean_row, sd_row)
+
+#estatisticas_descritivas_final_1991_full <- estatisticas_descritivas_final_1991_full %>%
+  #filter(!State %in% c("Rondônia", "Acre", "Roraima", "Amapá", "Tocantins"))
+
+# Step 4: Generate LaTeX output
+latex_table <- xtable(estatisticas_descritivas_final_1991_full)
+print(latex_table, type = "latex", include.rownames = FALSE)
+```
+
+
+```{r stat desc 1991 - anos educ}
+
+### 1991
+
+state_names <- c(
+  "11" = "Rondônia", 
+  "12" = "Acre", 
+  "13" = "Amazonas", 
+  "14" = "Roraima", 
+  "15" = "Pará", 
+  "16" = "Amapá", 
+  "17" = "Tocantins", 
+  "21" = "Maranhão",
+  "22" = "Piauí", 
+  "23" = "Ceará", 
+  "24" = "Rio Grande do Norte", 
+  "25" = "Paraíba", 
+  "26" = "Pernambuco", 
+  "27" = "Alagoas", 
+  "28" = "Sergipe", 
+  "29" = "Bahia",
+  "31" = "Minas Gerais", 
+  "32" = "Espírito Santo", 
+  "33" = "Rio de Janeiro", 
+  "35" = "São Paulo", 
+  "41" = "Paraná", 
+  "42" = "Santa Catarina", 
+  "43" = "Rio Grande do Sul", 
+  "50" = "Mato Grosso do Sul", 
+  "51" = "Mato Grosso", 
+  "52" = "Goiás", 
+  "53" = "Distrito Federal"
+)
+
+
+# Step 1: Calculate statistics for each UF
+estatisticas_descritivas_30_49 <- data_inc_educ_1991 %>%
+  group_by(uf_nascim) %>%
+  summarise(
+    # Total weighted observations (sum of weights)
+    Observations = round(sum(V7301, na.rm = TRUE), 0),
+
+    # Weighted mean and standard deviation for occupation
+    Employed_Migrant = weighted.mean(ocupada_migrante_15, w = V7301, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for children
+    Children = weighted.mean(children, w = V7301, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for labor force participation (LFP)
+    LFP_1970 = weighted.mean(lfp_uf_30_49_1970, w = V7301, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for total fertility rate (TFR)
+    TFR_1970 = weighted.mean(tfr_1970, w = V7301, na.rm = TRUE),
+    
+    # Weighted mean and standard deviation for educ cultural proxy
+    educ_1970 = weighted.mean(anos_estudo_1970_30_60, w = V7301, na.rm = TRUE),
+  )
+
+# Step 2: Rename UF codes to state names
+estatisticas_descritivas_30_49$uf_nascim <- state_names[as.character(estatisticas_descritivas_30_49$uf_nascim)]
+colnames(estatisticas_descritivas_30_49)[1] <- "State"  # Rename the 'uf_nascim' column to 'State'
+
+# Step 3: Calculate the overall mean and standard deviation for each metric and add as rows
+mean_row <- estatisticas_descritivas_30_49 %>%
+  summarise(
+    State = "Mean",
+    Observations = round(mean(Observations, na.rm = TRUE), 0),
+    Employed_Migrant = mean(Employed_Migrant, na.rm = TRUE),
+    Children = mean(Children, na.rm = TRUE),
+    LFP_1970 = mean(LFP_1970, na.rm = TRUE),
+    TFR_1970 = mean(TFR_1970, na.rm = TRUE),
+    educ_1970 = mean(educ_1970, na.rm = TRUE),
+  )
+
+sd_row <- estatisticas_descritivas_30_49 %>%
+  summarise(
+    State = "SD",
+    Observations = sd(Observations, na.rm = TRUE),
+    Employed_Migrant = sd(Employed_Migrant, na.rm = TRUE),
+    Children = sd(Children, na.rm = TRUE),
+    LFP_1970 = sd(LFP_1970, na.rm = TRUE),
+    TFR_1970 = sd(TFR_1970, na.rm = TRUE),
+    educ_1970 = sd(educ_1970, na.rm = TRUE),
+  )
+
+# Combine the main data with the summary rows
+estatisticas_descritivas_final <- bind_rows(estatisticas_descritivas_30_49, mean_row, sd_row)
+
+#estatisticas_descritivas_final <- estatisticas_descritivas_final %>%
+  #filter(!State %in% c("Rondônia", "Acre", "Roraima", "Amapá", "Tocantins"))
+
+# Step 4: Generate LaTeX output
+latex_table <- xtable(estatisticas_descritivas_final)
+print(latex_table, type = "latex", include.rownames = FALSE)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+library(dplyr)
+library(xtable)
+
+# Renomear UF para nomes dos estados
+state_names <- c(
+  "11" = "Rondônia", 
+  "12" = "Acre", 
+  "13" = "Amazonas", 
+  "14" = "Roraima", 
+  "15" = "Pará", 
+  "16" = "Amapá", 
+  "17" = "Tocantins", 
+  "21" = "Maranhão",
+  "22" = "Piauí", 
+  "23" = "Ceará", 
+  "24" = "Rio Grande do Norte", 
+  "25" = "Paraíba", 
+  "26" = "Pernambuco", 
+  "27" = "Alagoas", 
+  "28" = "Sergipe", 
+  "29" = "Bahia",
+  "31" = "Minas Gerais", 
+  "32" = "Espírito Santo", 
+  "33" = "Rio de Janeiro", 
+  "35" = "São Paulo", 
+  "41" = "Paraná", 
+  "42" = "Santa Catarina", 
+  "43" = "Rio Grande do Sul", 
+  "50" = "Mato Grosso do Sul", 
+  "51" = "Mato Grosso", 
+  "52" = "Goiás", 
+  "53" = "Distrito Federal"
+)
+
+# Preparar dados de cada ano
+
+# main
+
+## 1991
+dt_1991 <- read_parquet("D:/1_migration/1_datasets_migrants/censo/1991/censo_1991_migracao_tratada_migrante_15_final.parquet")
+dt_1991 <- dt_1991 |> 
+  mutate(uf_nascim = if_else(uf_nascim == 34, 35, uf_nascim))
+
+dt_1991$age_squared_sp <- dt_1991$age_sp^2
+dt_1991 <- dt_1991[dt_1991$income_sp_raw != 9999999, ]
+
+# deflaciona para 2010
+dt_1991$rend_med_mensal_pc_1 <- ifelse(
+  is.na(dt_1991$income_sp_raw) | dt_1991$income_sp_raw == 0,
+  NA,
+  dt_1991$income_sp_raw / 4418.739003
+)
+
+dt_1991$rend_med_mensal_pc_2 <- ifelse(
+  is.na(dt_1991$rend_med_mensal_pc_1) | dt_1991$rend_med_mensal_pc_1 == 0,
+  NA,
+  dt_1991$rend_med_mensal_pc_1*42.869474
+)
+
+dt_1991$log_rend_med_mensal_pc_2 <- ifelse(dt_1991$rend_med_mensal_pc_2 > 0, log(dt_1991$rend_med_mensal_pc_2), NA)
+
+names(dt_1991)[names(dt_1991) == "income_sp_raw"] <- "income_sp_raw_old"
+names(dt_1991)[names(dt_1991) == "rend_med_mensal_pc_2"] <- "income_sp_raw"
+
+dt_1991$log_income_sp_raw <- ifelse(dt_1991$income_sp_raw > 0, log(dt_1991$income_sp_raw), NA)
+
+dt_1991 <- dt_1991[dt_1991$children != 99, ]
+
+
+data_1991_main <- dt_1991 |> 
+  mutate(ano = 1991) |> 
+  dplyr::select(
+    ano, uf_nascim, V7301,
+    ocupada_migrante_15, children, V0354
+  ) |> 
+  rename(
+    peso = V7301, 
+    horas_migrante = V0354
+    )
+
+## 2000
+dt_2000 <- read_dta("D:/1_migration/1_datasets_migrants/censo/2000/censo_2000_migracao_tratada_migrante_15_final.dta")
+
+dt_2000 <- dt_2000 |> 
+  filter(age_fem %in% c(30:49)) |> 
+  mutate(uf_nascim = ifelse(uf_nascim == 34, 35, uf_nascim))
+
+dt_2000$children_under_5 <- 0
+dt_2000$children_under_5[dt_2000$v4654 <= 5] <- 1
+
+dt_2000$age_squared_sp <- dt_2000$age_sp^2
+
+# deflaciona rendimento do esposo para 2010
+dt_2000$rend_med_mensal_pc_1 <- ifelse(
+  is.na(dt_2000$income_sp_raw) | dt_2000$income_sp_raw == 0,
+  NA,
+  dt_2000$income_sp_raw / 21.821053 
+)
+
+dt_2000$rend_med_mensal_pc_2 <- ifelse(
+  is.na(dt_2000$rend_med_mensal_pc_1) | dt_2000$rend_med_mensal_pc_1 == 0,
+  NA,
+  dt_2000$rend_med_mensal_pc_1*42.869474
+)
+
+dt_2000$log_rend_med_mensal_pc_2 <- ifelse(dt_2000$rend_med_mensal_pc_2 > 0, log(dt_2000$rend_med_mensal_pc_2), NA)
+
+names(dt_2000)[names(dt_2000) == "income_sp_raw"] <- "income_sp_raw_old"
+names(dt_2000)[names(dt_2000) == "rend_med_mensal_pc_2"] <- "income_sp_raw"
+
+dt_2000$log_income_sp_raw <- ifelse(dt_2000$income_sp_raw > 0, log(dt_2000$income_sp_raw), NA)
+
+
+data_2000_main <- dt_2000 |> 
+  mutate(ano = 2000) |> 
+  dplyr::select(
+    ano, uf_nascim, P001,
+    ocupada_migrante_15, children, v4534
+  ) |> 
+    rename(
+    peso = P001, 
+    horas_migrante = v4534
+      )
+
+
+data_2010_main <- data_2010 |> 
+  mutate(ano = 2010) |> 
+  dplyr::select(
+    ano, uf_nascim, peso_pess,
+    ocup_migrante, children, horas_migrante
+  ) |> 
+  rename(
+    ocupada_migrante_15 = ocup_migrante,
+    peso = peso_pess
+)
+
+# junta bases
+data_main <- bind_rows(data_1991_main, data_2000_main, data_2010_main)
+
+
+data_1991_main <- data_1991 |> 
+  mutate(ano = 1991) |> 
+  dplyr::select(
+    ano, uf_nascim, V7301,
+    ocupada_migrante_15, children, V0354,
+    tfr_1970, lfp_uf_30_49_1970
+  ) |> 
+  rename(
+    peso = V7301, 
+    horas_migrante = V0354,
+    tfr = tfr_1970, 
+    lfp = lfp_uf_30_49_1970)
+
+data_2000_main <- data_2000 |> 
+  mutate(ano = 2000) |> 
+  dplyr::select(
+    ano, uf_nascim, P001,
+    ocupada_migrante_15, children, v4534,
+    tfr_1980, lfp_uf_30_49_1980
+  ) |> 
+    rename(
+    peso = P001, 
+    horas_migrante = v4534,
+    tfr = tfr_1980, 
+    lfp = lfp_uf_30_49_1980
+      )
+
+
+data_2010_main <- data_2010 |> 
+  mutate(ano = 2010) |> 
+  dplyr::select(
+    ano, uf_nascim, peso_pess,
+    ocup_migrante, children, horas_migrante,
+    tfr_1991, lfp_uf_30_49_1991
+  ) |> 
+  rename(
+    ocupada_migrante_15 = ocup_migrante,
+    peso = peso_pess, 
+    tfr = tfr_1991, 
+    lfp = lfp_uf_30_49_1991
+)
+  
+
+# Juntar os dados
+data <- bind_rows(data_1991_t, data_2000_t, data_2010_t)
+
+# Cálculo das estatísticas descritivas
+estatisticas_descritivas_30_49 <- data %>%
+  group_by(uf_nascim, ano) %>%
+  summarise(
+    `Observations (1991)` = sum(V7301, na.rm = TRUE),
+    `Observations (2000)` = sum(P001, na.rm = TRUE),
+    `Observations (2010)` = sum(peso_pess, na.rm = TRUE),
+
+    `Employed Migrant (1991)` = weighted.mean(ocupada_migrante_15, w = V7301, na.rm = TRUE),
+    `Employed Migrant (2000)` = weighted.mean(ocupada_migrante_15, w = P001, na.rm = TRUE),
+    `Employed Migrant (2010)` = weighted.mean(ocupada_migrante_15, w = peso_pess, na.rm = TRUE),
+
+    `Children (1991)` = weighted.mean(children, w = V7301, na.rm = TRUE),
+    `Children (2000)` = weighted.mean(children, w = P001, na.rm = TRUE),
+    `Children (2010)` = weighted.mean(children, w = peso_pess, na.rm = TRUE),
+  )
+
+# Renomear os códigos de UF para nomes dos estados
+estatisticas_descritivas_30_49 <- estatisticas_descritivas_30_49 %>%
+  mutate(State = state_names[as.character(uf_nascim)]) %>%
+  dplyr::select(State, everything(), -uf_nascim)
+
+# Calcular média e desvio padrão geral
+mean_row <- estatisticas_descritivas_30_49 %>%
+  summarise(across(-State, ~ mean(.x, na.rm = TRUE))) %>%
+  mutate(State = "Mean")
+
+sd_row <- estatisticas_descritivas_30_49 %>%
+  summarise(across(-State, ~ sd(.x, na.rm = TRUE))) %>%
+  mutate(State = "SD")
+
+# Combinar dados
+estatisticas_descritivas_final <- bind_rows(estatisticas_descritivas_30_49, mean_row, sd_row)
+
+# Gerar tabela em LaTeX
+latex_table <- xtable(estatisticas_descritivas_final)
+print(latex_table, type = "latex", include.rownames = FALSE)
+
+
+```
+
+```{r}
+# Cálculo das estatísticas descritivas
+estatisticas_descritivas_30_49 <- data %>%
+  group_by(uf_nascim) %>%
+  summarise(
+    `LFP (1970)` = weighted.mean(lfp_uf_30_49_1970, w = V7301, na.rm = TRUE),
+    `LFP (1980)` = weighted.mean(lfp_uf_30_49_1980, w = P001, na.rm = TRUE),
+    `LFP (1991)` = weighted.mean(lfp_uf_30_49_1991, w = peso_pess, na.rm = TRUE),
+
+    `TFR (1970)` = weighted.mean(tfr_1970, w = V7301, na.rm = TRUE),
+    `TFR (1980)` = weighted.mean(tfr_1980, w = P001, na.rm = TRUE),
+    `TFR (1991)` = weighted.mean(tfr_1991, w = peso_pess, na.rm = TRUE)
+  )
+
+# Renomear os códigos de UF para nomes dos estados
+estatisticas_descritivas_30_49 <- estatisticas_descritivas_30_49 %>%
+  mutate(State = state_names[as.character(uf_nascim)]) %>%
+  dplyr::select(State, everything(), -uf_nascim)
+
+# Calcular média e desvio padrão geral
+mean_row <- estatisticas_descritivas_30_49 %>%
+  summarise(across(-State, ~ mean(.x, na.rm = TRUE))) %>%
+  mutate(State = "Mean")
+
+sd_row <- estatisticas_descritivas_30_49 %>%
+  summarise(across(-State, ~ sd(.x, na.rm = TRUE))) %>%
+  mutate(State = "SD")
+
+# Combinar dados
+estatisticas_descritivas_final <- bind_rows(estatisticas_descritivas_30_49, mean_row, sd_row)
+
+# Gerar tabela em LaTeX
+latex_table <- xtable(estatisticas_descritivas_final)
+print(latex_table, type = "latex", include.rownames = FALSE)
+```
+
+### 2000
+
+```{r stat desc 2000}
+
+### 2000
+
+state_names <- c(
+  "11" = "Rondônia", 
+  "12" = "Acre", 
+  "13" = "Amazonas", 
+  "14" = "Roraima", 
+  "15" = "Pará", 
+  "16" = "Amapá", 
+  "17" = "Tocantins", 
+  "21" = "Maranhão",
+  "22" = "Piauí", 
+  "23" = "Ceará", 
+  "24" = "Rio Grande do Norte", 
+  "25" = "Paraíba", 
+  "26" = "Pernambuco", 
+  "27" = "Alagoas", 
+  "28" = "Sergipe", 
+  "29" = "Bahia",
+  "31" = "Minas Gerais", 
+  "32" = "Espírito Santo", 
+  "33" = "Rio de Janeiro", 
+  "35" = "São Paulo", 
+  "41" = "Paraná", 
+  "42" = "Santa Catarina", 
+  "43" = "Rio Grande do Sul", 
+  "50" = "Mato Grosso do Sul", 
+  "51" = "Mato Grosso", 
+  "52" = "Goiás", 
+  "53" = "Distrito Federal"
+)
+
+
+# Step 1: Calculate statistics for each UF
+estatisticas_descritivas_30_49_2000 <- data_2000 %>%
+  # group_by(uf_nascim) %>%
+  summarise(
+    # Total weighted observations (sum of weights)
+    Observations = round(sum(P001, na.rm = TRUE)),
+
+    # Weighted mean and standard deviation for occupation
+    Employed_Migrant = weighted.mean(ocupada_migrante_15, w = P001, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for children
+    Children = weighted.mean(children, w = P001, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for labor force participation (LFP)
+    LFP_1980 = weighted.mean(lfp_uf_30_49_1980, w = P001, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for total fertility rate (TFR)
+    TFR_1980 = weighted.mean(tfr_1980, w = P001, na.rm = TRUE),
+  )
+
+# Step 2: Rename UF codes to state names
+estatisticas_descritivas_30_49_2000$uf_nascim <- state_names[as.character(estatisticas_descritivas_30_49_2000$uf_nascim)]
+colnames(estatisticas_descritivas_30_49_2000)[1] <- "State"  # Rename the 'uf_nascim' column to 'State'
+
+# Step 3: Calculate the overall mean and standard deviation for each metric and add as rows
+mean_row <- estatisticas_descritivas_30_49_2000 %>%
+  summarise(
+    State = "Mean",
+    Observations = mean(Observations, na.rm = TRUE),
+    Employed_Migrant = mean(Employed_Migrant, na.rm = TRUE),
+    Children = mean(Children, na.rm = TRUE),
+    LFP_1980 = mean(LFP_1980, na.rm = TRUE),
+    TFR_1980 = mean(TFR_1980, na.rm = TRUE),
+  )
+
+sd_row <- estatisticas_descritivas_30_49_2000 %>%
+  summarise(
+    State = "SD",
+    Observations = sd(Observations, na.rm = TRUE),
+    Employed_Migrant = sd(Employed_Migrant, na.rm = TRUE),
+    Children = sd(Children, na.rm = TRUE),
+    LFP_1980 = sd(LFP_1980, na.rm = TRUE),
+    TFR_1980 = sd(TFR_1980, na.rm = TRUE),
+  )
+
+# Combine the main data with the summary rows
+estatisticas_descritivas_final <- bind_rows(estatisticas_descritivas_30_49_2000, mean_row, sd_row)
+
+#estatisticas_descritivas_final <- estatisticas_descritivas_final %>%
+  #filter(!State %in% c("Rondônia", "Acre", "Roraima", "Amapá", "Tocantins"))
+
+# Step 4: Generate LaTeX output
+latex_table <- xtable(estatisticas_descritivas_final)
+print(latex_table, type = "latex", include.rownames = FALSE)
+
+
+```
+
+### 2000 - full
+```{r stat desc 2000 - full}
+
+### 2000
+
+state_names <- c(
+  "11" = "Rondônia", 
+  "12" = "Acre", 
+  "13" = "Amazonas", 
+  "14" = "Roraima", 
+  "15" = "Pará", 
+  "16" = "Amapá", 
+  "17" = "Tocantins", 
+  "21" = "Maranhão",
+  "22" = "Piauí", 
+  "23" = "Ceará", 
+  "24" = "Rio Grande do Norte", 
+  "25" = "Paraíba", 
+  "26" = "Pernambuco", 
+  "27" = "Alagoas", 
+  "28" = "Sergipe", 
+  "29" = "Bahia",
+  "31" = "Minas Gerais", 
+  "32" = "Espírito Santo", 
+  "33" = "Rio de Janeiro", 
+  "35" = "São Paulo", 
+  "41" = "Paraná", 
+  "42" = "Santa Catarina", 
+  "43" = "Rio Grande do Sul", 
+  "50" = "Mato Grosso do Sul", 
+  "51" = "Mato Grosso", 
+  "52" = "Goiás", 
+  "53" = "Distrito Federal"
+)
+
+
+# Step 1: Calculate statistics for each UF
+estatisticas_descritivas_30_49_2000_full <- data_2000 %>%
+  group_by(uf_nascim) %>%
+  summarise(
+    # Total weighted observations (sum of weights)
+    Observations = round(sum(P001, na.rm = TRUE)),
+    
+    # Average age
+    Migrant_Woman_Age = weighted.mean(age_fem, w = P001, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for occupation
+    Employed_Migrant = weighted.mean(ocupada_migrante_15, w = P001, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for children
+    Children = weighted.mean(children, w = P001, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for labor force participation (LFP)
+    LFP_1980 = weighted.mean(lfp_uf_30_49_1980, w = P001, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for total fertility rate (TFR)
+    TFR_1980 = weighted.mean(tfr_1980, w = P001, na.rm = TRUE),
+  )
+
+# Step 2: Rename UF codes to state names
+estatisticas_descritivas_30_49_2000_full$uf_nascim <- state_names[as.character(estatisticas_descritivas_30_49_2000_full$uf_nascim)]
+colnames(estatisticas_descritivas_30_49_2000_full)[1] <- "State"  # Rename the 'uf_nascim' column to 'State'
+
+# Step 3: Calculate the overall mean and standard deviation for each metric and add as rows
+mean_row <- estatisticas_descritivas_30_49_2000_full %>%
+  summarise(
+    State = "Mean",
+    Observations = mean(Observations, na.rm = TRUE),
+    Migrant_Woman_Age = mean(Migrant_Woman_Age, na.rm = TRUE),
+    Employed_Migrant = mean(Employed_Migrant, na.rm = TRUE),
+    Children = mean(Children, na.rm = TRUE),
+    LFP_1980 = mean(LFP_1980, na.rm = TRUE),
+    TFR_1980 = mean(TFR_1980, na.rm = TRUE),
+  )
+
+sd_row <- estatisticas_descritivas_30_49_2000_full %>%
+  summarise(
+    State = "SD",
+    Observations = sd(Observations, na.rm = TRUE),
+    Migrant_Woman_Age = sd(Migrant_Woman_Age, na.rm = TRUE),
+    Employed_Migrant = sd(Employed_Migrant, na.rm = TRUE),
+    Children = sd(Children, na.rm = TRUE),
+    LFP_1980 = sd(LFP_1980, na.rm = TRUE),
+    TFR_1980 = sd(TFR_1980, na.rm = TRUE),
+  )
+
+# Combine the main data with the summary rows
+estatisticas_descritivas_final_2000_full <- bind_rows(estatisticas_descritivas_30_49_2000_full, mean_row, sd_row)
+
+#estatisticas_descritivas_final <- estatisticas_descritivas_final %>%
+  #filter(!State %in% c("Rondônia", "Acre", "Roraima", "Amapá", "Tocantins"))
+
+# Step 4: Generate LaTeX output
+latex_table <- xtable(estatisticas_descritivas_final_2000_full)
+print(latex_table, type = "latex", include.rownames = FALSE)
+
+
+```
+
+### 2010
+
+```{r}
+### 2010
+
+state_names <- c(
+  "11" = "Rondônia", 
+  "12" = "Acre", 
+  "13" = "Amazonas", 
+  "14" = "Roraima", 
+  "15" = "Pará", 
+  "16" = "Amapá", 
+  "17" = "Tocantins", 
+  "21" = "Maranhão",
+  "22" = "Piauí", 
+  "23" = "Ceará", 
+  "24" = "Rio Grande do Norte", 
+  "25" = "Paraíba", 
+  "26" = "Pernambuco", 
+  "27" = "Alagoas", 
+  "28" = "Sergipe", 
+  "29" = "Bahia",
+  "31" = "Minas Gerais", 
+  "32" = "Espírito Santo", 
+  "33" = "Rio de Janeiro", 
+  "35" = "São Paulo", 
+  "41" = "Paraná", 
+  "42" = "Santa Catarina", 
+  "43" = "Rio Grande do Sul", 
+  "50" = "Mato Grosso do Sul", 
+  "51" = "Mato Grosso", 
+  "52" = "Goiás", 
+  "53" = "Distrito Federal"
+)
+
+
+
+# Step 1: Calculate statistics for each UF
+estatisticas_descritivas_30_49_2010 <- data_2010 %>%
+  group_by(uf_nascim) %>%
+  summarise(
+    # Total weighted observations (sum of weights)
+    Observations = round(sum(peso_pess, na.rm = TRUE)),
+
+    # Weighted mean and standard deviation for occupation
+    Employed_Migrant = weighted.mean(ocup_migrante, w = peso_pess, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for children
+    Children = weighted.mean(children, w = peso_pess, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for labor force participation (LFP)
+    LFP_1991 = weighted.mean(lfp_uf_30_49_1991, w = peso_pess, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for total fertility rate (TFR)
+    TFR_1991 = weighted.mean(tfr_1991, w = peso_pess, na.rm = TRUE),
+  )
+
+# Step 2: Rename UF codes to state names
+estatisticas_descritivas_30_49_2010$uf_nascim <- state_names[as.character(estatisticas_descritivas_30_49_2010$uf_nascim)]
+colnames(estatisticas_descritivas_30_49_2010)[1] <- "State"  # Rename the 'uf_nascim' column to 'State'
+
+# Step 3: Calculate the overall mean and standard deviation for each metric and add as rows
+mean_row <- estatisticas_descritivas_30_49_2010 %>%
+  summarise(
+    State = "Mean",
+    Observations = mean(Observations, na.rm = TRUE),
+    Employed_Migrant = mean(Employed_Migrant, na.rm = TRUE),
+    Children = mean(Children, na.rm = TRUE),
+    LFP_1991 = mean(LFP_1991, na.rm = TRUE),
+    TFR_1991 = mean(TFR_1991, na.rm = TRUE),
+  )
+
+sd_row <- estatisticas_descritivas_30_49_2010 %>%
+  summarise(
+    State = "SD",
+    Observations = sd(Observations, na.rm = TRUE),
+    Employed_Migrant = sd(Employed_Migrant, na.rm = TRUE),
+    Children = sd(Children, na.rm = TRUE),
+    LFP_1991 = sd(LFP_1991, na.rm = TRUE),
+    TFR_1991 = sd(TFR_1991, na.rm = TRUE),
+  )
+
+# Combine the main data with the summary rows
+estatisticas_descritivas_final <- bind_rows(estatisticas_descritivas_30_49_2010, mean_row, sd_row)
+
+#estatisticas_descritivas_final <- estatisticas_descritivas_final %>%
+  #filter(!State %in% c("Rondônia", "Acre", "Roraima", "Amapá", "Tocantins"))
+
+# Step 4: Generate LaTeX output
+latex_table <- xtable(estatisticas_descritivas_final)
+print(latex_table, type = "latex", include.rownames = FALSE)
+
+```
+
+### 2010 - full
+```{r}
+### 2010
+
+state_names <- c(
+  "11" = "Rondônia", 
+  "12" = "Acre", 
+  "13" = "Amazonas", 
+  "14" = "Roraima", 
+  "15" = "Pará", 
+  "16" = "Amapá", 
+  "17" = "Tocantins", 
+  "21" = "Maranhão",
+  "22" = "Piauí", 
+  "23" = "Ceará", 
+  "24" = "Rio Grande do Norte", 
+  "25" = "Paraíba", 
+  "26" = "Pernambuco", 
+  "27" = "Alagoas", 
+  "28" = "Sergipe", 
+  "29" = "Bahia",
+  "31" = "Minas Gerais", 
+  "32" = "Espírito Santo", 
+  "33" = "Rio de Janeiro", 
+  "35" = "São Paulo", 
+  "41" = "Paraná", 
+  "42" = "Santa Catarina", 
+  "43" = "Rio Grande do Sul", 
+  "50" = "Mato Grosso do Sul", 
+  "51" = "Mato Grosso", 
+  "52" = "Goiás", 
+  "53" = "Distrito Federal"
+)
+
+
+
+# Step 1: Calculate statistics for each UF
+estatisticas_descritivas_30_49_2010_full <- data_2010 %>%
+  group_by(uf_nascim) %>%
+  summarise(
+    # Total weighted observations (sum of weights)
+    Observations = round(sum(peso_pess, na.rm = TRUE)),
+    
+    # Average age
+    Migrant_Woman_Age = weighted.mean(age_fem, w = peso_pess, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for occupation
+    Employed_Migrant = weighted.mean(ocup_migrante, w = peso_pess, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for children
+    Children = weighted.mean(children, w = peso_pess, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for labor force participation (LFP)
+    LFP_1991 = weighted.mean(lfp_uf_30_49_1991, w = peso_pess, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for total fertility rate (TFR)
+    TFR_1991 = weighted.mean(tfr_1991, w = peso_pess, na.rm = TRUE),
+  )
+
+# Step 2: Rename UF codes to state names
+estatisticas_descritivas_30_49_2010_full$uf_nascim <- state_names[as.character(estatisticas_descritivas_30_49_2010_full$uf_nascim)]
+colnames(estatisticas_descritivas_30_49_2010_full)[1] <- "State"  # Rename the 'uf_nascim' column to 'State'
+
+# Step 3: Calculate the overall mean and standard deviation for each metric and add as rows
+mean_row <- estatisticas_descritivas_30_49_2010_full %>%
+  summarise(
+    State = "Mean",
+    Observations = mean(Observations, na.rm = TRUE),
+    Migrant_Woman_Age = mean(Migrant_Woman_Age, na.rm = TRUE),
+    Employed_Migrant = mean(Employed_Migrant, na.rm = TRUE),
+    Children = mean(Children, na.rm = TRUE),
+    LFP_1991 = mean(LFP_1991, na.rm = TRUE),
+    TFR_1991 = mean(TFR_1991, na.rm = TRUE),
+  )
+
+sd_row <- estatisticas_descritivas_30_49_2010_full %>%
+  summarise(
+    State = "SD",
+    Observations = sd(Observations, na.rm = TRUE),
+    Migrant_Woman_Age = sd(Migrant_Woman_Age, na.rm = TRUE),
+    Employed_Migrant = sd(Employed_Migrant, na.rm = TRUE),
+    Children = sd(Children, na.rm = TRUE),
+    LFP_1991 = sd(LFP_1991, na.rm = TRUE),
+    TFR_1991 = sd(TFR_1991, na.rm = TRUE),
+  )
+
+# Combine the main data with the summary rows
+estatisticas_descritivas_final_2010_full <- bind_rows(estatisticas_descritivas_30_49_2010_full, mean_row, sd_row)
+
+#estatisticas_descritivas_final_2010_full <- estatisticas_descritivas_final_2010_full %>%
+  #filter(!State %in% c("Rondônia", "Acre", "Roraima", "Amapá", "Tocantins"))
+
+# Step 4: Generate LaTeX output
+latex_table <- xtable(estatisticas_descritivas_final_2010_full)
+print(latex_table, type = "latex", include.rownames = FALSE)
+
+```
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(xtable)
+
+# Calculando as estatísticas para cada UF e ano
+estatisticas_descritivas_30_49 <- data_main %>%
+  group_by(uf_nascim, ano) %>%
+  summarise(
+    Observations = sum(peso, na.rm = TRUE),
+    Employed_Migrant = weighted.mean(ocupada_migrante_15, w = peso, na.rm = TRUE),
+    Children = weighted.mean(children, w = peso, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Transformando os resultados para que cada ano seja uma coluna
+estatisticas_wide <- estatisticas_descritivas_30_49 %>%
+  pivot_wider(
+    names_from = ano,
+    values_from = c(Observations, Employed_Migrant, Children),
+    names_glue = "{.value}_{ano}"
+  )
+
+# Renomeando os códigos dos estados para nomes completos
+state_names <- c(
+  "11" = "Rondônia", "12" = "Acre", "13" = "Amazonas", "14" = "Roraima",
+  "15" = "Pará", "16" = "Amapá", "17" = "Tocantins", "21" = "Maranhão",
+  "22" = "Piauí", "23" = "Ceará", "24" = "Rio Grande do Norte", "25" = "Paraíba",
+  "26" = "Pernambuco", "27" = "Alagoas", "28" = "Sergipe", "29" = "Bahia",
+  "31" = "Minas Gerais", "32" = "Espírito Santo", "33" = "Rio de Janeiro",
+  "35" = "São Paulo", "41" = "Paraná", "42" = "Santa Catarina",
+  "43" = "Rio Grande do Sul", "50" = "Mato Grosso do Sul", "51" = "Mato Grosso",
+  "52" = "Goiás", "53" = "Distrito Federal"
+)
+
+estatisticas_wide <- estatisticas_wide %>%
+  mutate(State = state_names[as.character(uf_nascim)]) %>%
+  dplyr::select(State, starts_with("Observations"), starts_with("Employed"), starts_with("Children"))
+
+# Renomear as colunas
+estatisticas_wide <- estatisticas_wide %>%
+  rename(
+    `State` = State,
+    `Observations 1991` = Observations_1991,
+    `Observations 2000` = Observations_2000,
+    `Observations 2010` = Observations_2010,
+    `Employed 1991` = Employed_Migrant_1991,
+    `Employed 2000` = Employed_Migrant_2000,
+    `Employed 2010` = Employed_Migrant_2010,
+    `Children 1991` = Children_1991,
+    `Children 2000` = Children_2000,
+    `Children 2010` = Children_2010
+  )
+
+# Adicionar as linhas de média e SD
+mean_row <- estatisticas_wide %>%
+  summarise(across(
+    where(is.numeric), mean, na.rm = TRUE
+  )) %>%
+  mutate(State = "Mean")
+
+sd_row <- estatisticas_wide %>%
+  summarise(across(
+    where(is.numeric), sd, na.rm = TRUE
+  )) %>%
+  mutate(State = "SD")
+
+# Combinar a tabela com as linhas de média e SD
+estatisticas_wide <- bind_rows(estatisticas_wide, mean_row, sd_row)
+
+# Reorganizar a tabela para que a coluna "State" fique primeiro
+estatisticas_wide <- estatisticas_wide %>%
+  relocate(State, everything())
+
+# Visualizar a tabela final
+print(estatisticas_wide)
+
+# Exportar para LaTeX
+library(xtable)
+latex_table <- xtable(estatisticas_wide)
+print(latex_table, type = "latex", include.rownames = FALSE)
+
+```
+```{r}
+library(dplyr)
+library(tidyr)
+library(xtable)
+
+# Calculando as estatísticas para cada UF e ano
+estatisticas_descritivas_30_49 <- data %>%
+  group_by(uf_nascim, ano) %>%
+  summarise(
+    TFR = weighted.mean(tfr, w = peso, na.rm = TRUE),
+    LFP = weighted.mean(lfp, w = peso, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Transformando os resultados para que cada ano seja uma coluna
+estatisticas_wide <- estatisticas_descritivas_30_49 %>%
+  pivot_wider(
+    names_from = ano,
+    values_from = c(TFR, LFP),
+    names_glue = "{.value}_{ano}"
+  )
+
+# Renomeando os códigos dos estados para nomes completos
+state_names <- c(
+  "11" = "Rondônia", "12" = "Acre", "13" = "Amazonas", "14" = "Roraima",
+  "15" = "Pará", "16" = "Amapá", "17" = "Tocantins", "21" = "Maranhão",
+  "22" = "Piauí", "23" = "Ceará", "24" = "Rio Grande do Norte", "25" = "Paraíba",
+  "26" = "Pernambuco", "27" = "Alagoas", "28" = "Sergipe", "29" = "Bahia",
+  "31" = "Minas Gerais", "32" = "Espírito Santo", "33" = "Rio de Janeiro",
+  "35" = "São Paulo", "41" = "Paraná", "42" = "Santa Catarina",
+  "43" = "Rio Grande do Sul", "50" = "Mato Grosso do Sul", "51" = "Mato Grosso",
+  "52" = "Goiás", "53" = "Distrito Federal"
+)
+
+estatisticas_wide <- estatisticas_wide %>%
+  mutate(State = state_names[as.character(uf_nascim)]) %>%
+  dplyr::select(State, starts_with("TFR"), starts_with("LFP"))
+
+# Renomear as colunas
+estatisticas_wide <- estatisticas_wide %>%
+  rename(
+    `State` = State,
+    `TFR 1970` = TFR_1991,
+    `TFR 1980` = TFR_2000,
+    `TFR 1991` = TFR_2010,
+    `LFP 1970` = LFP_1991,
+    `LFP 1980` = LFP_2000,
+    `LFP 1991` = LFP_2010,
+  )
+
+# Adicionar as linhas de média e SD
+mean_row <- estatisticas_wide %>%
+  summarise(across(
+    where(is.numeric), weighted.mean, w = peso, na.rm = TRUE
+  )) %>%
+  mutate(State = "Mean")
+
+sd_row <- estatisticas_wide %>%
+  summarise(across(
+    where(is.numeric), sd, na.rm = TRUE
+  )) %>%
+  mutate(State = "SD")
+
+# Combinar a tabela com as linhas de média e SD
+estatisticas_wide <- bind_rows(estatisticas_wide, mean_row, sd_row)
+
+# Reorganizar a tabela para que a coluna "State" fique primeiro
+estatisticas_wide <- estatisticas_wide %>%
+  relocate(State, everything())
+
+# Visualizar a tabela final
+print(estatisticas_wide)
+
+# Exportar para LaTeX
+library(xtable)
+latex_table <- xtable(estatisticas_wide)
+print(latex_table, type = "latex", include.rownames = FALSE)
+
+
+```
+
+```{r image}
+setwd("D:/1_migration/4_results_migrants/ambiente")
+load("primeiro.RData")
+```
