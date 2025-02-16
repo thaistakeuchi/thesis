@@ -31,6 +31,9 @@ sapply(load.lib, require, character=TRUE)
 # 1991 #
 data_1991 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_30_49.xlsx")
 
+write_parquet(data_1991, "D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_30_49.parquet")
+
+
 # exclui tfr_1970 errada
 data_1991 <- data_1991 |> 
   dplyr::select(-tfr_1970)
@@ -40,7 +43,6 @@ tfr_1940_1980_uf <- read_xlsx("D:/1_migration/1_datasets_migrants/fecundidade_br
 tfr_1970_uf <- tfr_1940_1980_uf |>
   dplyr::select(uf_nascim, tfr_1970)
 data_1991 <- merge(data_1991, tfr_1970_uf, by = "uf_nascim")
-
 
 # 2000 #
 data_2000 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_2000_proxies_1980_30_49.xlsx")
@@ -2379,6 +2381,38 @@ estatisticas_descritivas_30_49_1991$uf_nascim <- state_names[as.character(estati
 colnames(estatisticas_descritivas_30_49_1991)[1] <- "State"  # Rename the 'uf_nascim' column to 'State'
 
 # Step 3: Calculate the overall mean and standard deviation for each metric and add as rows
+
+estatisticas_descritivas_30_49_1991_brazil <- data_1991 %>%
+  summarise(
+    # Total weighted observations (sum of weights)
+    Observations = round(sum(V7301, na.rm = TRUE), 0),
+
+    # Weighted mean and standard deviation for occupation
+    Employed_Migrant = weighted.mean(ocupada_migrante_15, w = V7301, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for children
+    Children = weighted.mean(children, w = V7301, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for labor force participation (LFP)
+    LFP_1970 = weighted.mean(lfp_uf_30_49_1970, w = V7301, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for total fertility rate (TFR)
+    TFR_1970 = weighted.mean(tfr_1970, w = V7301, na.rm = TRUE),
+  )
+
+estatisticas_descritivas_30_49_1991_brazil_sd <- data_1991 %>%
+  summarise(
+    LFP_1970 = sqrt(wtd.var(lfp_uf_30_49_1970, weights = V7301, na.rm = TRUE)),
+    TFR_1970 = sqrt(wtd.var(tfr_1970, weights = V7301, na.rm = TRUE))
+  )
+
+
+
+
+
+
+
+
 mean_row <- estatisticas_descritivas_30_49_1991 %>%
   summarise(
     State = "Mean",
@@ -2386,7 +2420,7 @@ mean_row <- estatisticas_descritivas_30_49_1991 %>%
     Employed_Migrant = mean(Employed_Migrant, na.rm = TRUE),
     Children = mean(Children, na.rm = TRUE),
     LFP_1970 = mean(LFP_1970, na.rm = TRUE),
-    TFR_1970 = mean(TFR_1970, na.rm = TRUE),
+    TFR_1970 = weighted.mean(TFR_1970, w = V7301, na.rm = TRUE),
   )
 
 sd_row <- estatisticas_descritivas_30_49_1991 %>%
@@ -3285,6 +3319,7 @@ print(latex_table, type = "latex", include.rownames = FALSE)
 
 ```
 
+### Tabelas finais
 ```{r}
 library(dplyr)
 library(tidyr)
@@ -3368,6 +3403,7 @@ latex_table <- xtable(estatisticas_wide)
 print(latex_table, type = "latex", include.rownames = FALSE)
 
 ```
+
 ```{r}
 library(dplyr)
 library(tidyr)

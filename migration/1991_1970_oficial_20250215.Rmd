@@ -1,0 +1,106 @@
+---
+title: "Análise 1991: usando dados de lfp + tfr de 1970 + tirando estados inexistentes em 1970"
+author: "Thais Takeuchi"
+date: "2025-02-15"
+output: html_document
+---
+
+## Load packages
+
+```{r load, message=FALSE, warning=FALSE, include=FALSE}
+#######################
+# PREPARE ENVIRONMENT
+#######################
+
+rm(list = ls())
+
+load.lib <- c("data.table","foreign","stargazer","devtools","stringi", "srvyr", "survey","tidyverse","gtools", "remote","installr","microdadosBrasil","ggplot2","viridis","hrbrthemes","WDI","dplyr", "arrow", "readxl","rio","writexl","dineq", "basedosdados", "httr", "haven", "openxlsx", "fixest", "readxl", "xtable")
+
+install.lib <- load.lib[!load.lib %in% installed.packages()]
+for(lib in install.lib) install.packages(lib,dependencies=TRUE)
+sapply(load.lib, require, character=TRUE)
+```
+
+## CENSO
+
+```{r census}
+data_1991_sem_estados <- read_parquet("D:/1_migration/1_datasets_migrants/censo/1991/censo_1991_migracao_tratada_migrante_15_final.parquet") # só tem migrantes
+data_1991_sem_estados <- data_1991_sem_estados |> 
+  mutate(uf_nascim = if_else(uf_nascim == 34, 35, uf_nascim))
+
+data_1991_sem_estados$age_squared_sp <- data_1991_sem_estados$age_sp^2
+data_1991_sem_estados <- data_1991_sem_estados[data_1991_sem_estados$income_sp_raw != 9999999, ]
+
+# deflaciona para 2010
+data_1991_sem_estados$rend_med_mensal_pc_1 <- ifelse(
+  is.na(data_1991_sem_estados$income_sp_raw) | data_1991_sem_estados$income_sp_raw == 0,
+  NA,
+  data_1991_sem_estados$income_sp_raw / 4418.739003
+)
+
+data_1991_sem_estados$rend_med_mensal_pc_2 <- ifelse(
+  is.na(data_1991_sem_estados$rend_med_mensal_pc_1) | data_1991_sem_estados$rend_med_mensal_pc_1 == 0,
+  NA,
+  data_1991_sem_estados$rend_med_mensal_pc_1*42.869474
+)
+
+data_1991_sem_estados$log_rend_med_mensal_pc_2 <- ifelse(data_1991_sem_estados$rend_med_mensal_pc_2 > 0, log(data_1991_sem_estados$rend_med_mensal_pc_2), NA)
+
+names(data_1991_sem_estados)[names(data_1991_sem_estados) == "income_sp_raw"] <- "income_sp_raw_old"
+names(data_1991_sem_estados)[names(data_1991_sem_estados) == "rend_med_mensal_pc_2"] <- "income_sp_raw"
+
+data_1991_sem_estados$log_income_sp_raw <- ifelse(data_1991_sem_estados$income_sp_raw > 0, log(data_1991_sem_estados$income_sp_raw), NA)
+
+data_1991_sem_estados <- data_1991_sem_estados[data_1991_sem_estados$children != 99, ]
+data_1991_sem_estados <- data_1991_sem_estados |> 
+  filter(age_fem %in% c(30:49))
+```
+
+## LFP
+
+```{r pnad}
+lfp_1970_30_49_uf <- read_xlsx("D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_30-49_1970.xlsx")
+lfp_1970_30_49_uf <- lfp_1970_30_49_uf |> 
+  filter(!uf_nascim %in% c(11, 14, 16, 17, 50)) |> 
+  rename(lfp_uf_30_49_1970 = lfp_uf_1970)
+
+lfp_1970_30_39_uf <- read_xlsx("D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_30-39_1970.xlsx")
+lfp_1970_30_39_uf <- lfp_1970_30_39_uf |> 
+  filter(!uf_nascim %in% c(11, 14, 16, 17, 50)) |> 
+  rename(lfp_uf_30_39_1970 = lfp_uf_1970)
+
+lfp_1970_40_49_uf <- read_xlsx("D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_40-49_1970.xlsx")
+lfp_1970_40_49_uf <- lfp_1970_40_49_uf |>
+  filter(!uf_nascim %in% c(11, 14, 16, 17, 50)) |> 
+  rename(lfp_uf_40_49_1970 = lfp_uf_1970)
+
+lfp_1970_mais_10_uf <- read_xlsx("D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_10-mais_1970.xlsx")
+lfp_1970_mais_10_uf <- lfp_1970_mais_10_uf |> 
+  filter(!uf_nascim %in% c(11, 14, 16, 17, 50)) |> 
+  rename(lfp_uf_mais_10_1970 = lfp_uf_1970)
+```
+
+## TFR
+
+```{r tfr}
+tfr_1970_1991_uf <- read_xlsx("D:/1_migration/1_datasets_migrants/fecundidade_brasil/tfr_1970_1991_correta_sem_estados.xlsx")
+tfr_1970_uf <- tfr_1970_1991_uf |>
+  dplyr::select(uf_nascim, tfr_1970)
+```
+
+### junta bases e gera base final
+
+```{r junta bases}
+data_1991_sem_estados <- merge(data_1991_sem_estados, lfp_1970_30_49_uf, by = "uf_nascim")
+data_1991_sem_estados <- merge(data_1991_sem_estados, lfp_1970_30_39_uf, by = "uf_nascim")
+data_1991_sem_estados <- merge(data_1991_sem_estados, lfp_1970_mais_10_uf, by = "uf_nascim")
+data_1991_sem_estados <- merge(data_1991_sem_estados, lfp_1970_40_49_uf, by = "uf_nascim")
+
+data_1991_sem_estados <- merge(data_1991_sem_estados, tfr_1970_uf, by = "uf_nascim")
+
+write_xlsx(data_1991_sem_estados, "D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_30_49_sem_estados.xlsx")
+
+write_parquet(data_1991_sem_estados, "D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_30_49_sem_estados.parquet")
+
+```
+
