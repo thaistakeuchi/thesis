@@ -32,20 +32,10 @@ sapply(load.lib, require, character=TRUE)
 data_1991 <- arrow::read_parquet("D:/1_migration/1_datasets_migrants/bases/census_1991_proxies_1970_30_49_correta.parquet")
 
 # 2000 #
-data_2000 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_2000_proxies_1980_30_49.xlsx")
-
-# exclui tfr_1980 errada
-data_2000 <- data_2000 |> 
-  dplyr::select(-tfr_1980)
-
-# inclui tfr correta + merge data
-tfr_1980_uf <- tfr_1940_1980_uf |>
-  dplyr::select(uf_nascim, tfr_1980)
-data_2000 <- merge(data_2000, tfr_1980_uf, by = "uf_nascim")
+data_2000 <- arrow::read_parquet("D:/1_migration/1_datasets_migrants/bases/census_2000_proxies_1980_30_49_correta.parquet")
 
 # 2010 #
-data_2010 <- read_xlsx("D:/1_migration/1_datasets_migrants/bases/census_2010_proxies_1991_30_49.xlsx")
-
+data_2010 <- arrow::read_parquet("D:/1_migration/1_datasets_migrants/bases/census_2010_proxies_1991_30_49_correta.parquet")
 ```
 
 ## CENSOS - area
@@ -2307,56 +2297,7 @@ print(mais_UF_ponderado)
 
 ## Summary statistics
 
-### 1991 - main sample
-```{r descriptive statistics 1991 - sample}
-
-# Step 1: Calcular estatísticas para cada UF
-estatisticas_descritivas_30_49_1991 <- data_1991 %>%
-  group_by(uf_nascim) %>%
-  summarise(
-    # Total weighted observations (sum of weights)
-    Observations = round(sum(V7301, na.rm = TRUE), 0),
-
-    # Average age
-    Migrant_Woman_Age = round(weighted.mean(age_fem, w = V7301, na.rm = TRUE), 2),
-
-    # Weighted mean for occupation
-    Employed_Migrant = round(weighted.mean(ocupada_migrante_15, w = V7301, na.rm = TRUE), 2),
-
-    # Weighted mean for children
-    Children = round(weighted.mean(children, w = V7301, na.rm = TRUE), 2)
-  )
-
-# Step 2: Renomear códigos UF para nomes dos estados
-estatisticas_descritivas_30_49_1991$uf_nascim <- state_names[as.character(estatisticas_descritivas_30_49_1991$uf_nascim)]
-colnames(estatisticas_descritivas_30_49_1991)[1] <- "State"  # Renomear coluna para "State"
-
-# Step 3: Calcular médias gerais e adicioná-las como uma linha extra
-mean_row <- data_1991 %>%
-  summarise(
-    Observations = round(sum(V7301, na.rm = TRUE), 0),
-    Employed_Migrant = round(weighted.mean(ocupada_migrante_15, w = V7301, na.rm = TRUE), 2),
-    Children = round(weighted.mean(children, w = V7301, na.rm = TRUE), 2),
-    Migrant_Woman_Age = round(weighted.mean(age_fem, w = V7301, na.rm = TRUE), 2)
-  ) %>%
-  mutate(State = "Mean")
-
-# Combinar dados principais com a linha de médias
-stat_1991 <- bind_rows(estatisticas_descritivas_30_49_1991, mean_row)
-stat_1991 <- stat_1991 %>%
-  mutate(across(where(is.numeric), ~ round(.x, 2)))
-
-# Step 4: Gerar tabela LaTeX formatada
-latex_table <- xtable(stat_1991)
-
-# Imprimir saída LaTeX
-print(latex_table, type = "latex", include.rownames = FALSE)
-
-```
-
-### 1970 - cultural proxies
-
-```{r 1970 cultural proxies}
+```{r state names}
 state_names <- c(
   "11" = "Rondônia", 
   "12" = "Acre", 
@@ -2387,6 +2328,83 @@ state_names <- c(
   "53" = "Distrito Federal"
 )
 
+```
+
+
+
+
+### 1991 - main sample (origin)
+```{r descriptive statistics 1991 - origin}
+# Step 1: Calcular estatísticas para cada UF
+estatisticas_descritivas_30_49_1991 <- data_1991 %>%
+  group_by(uf_nascim) %>%
+  summarise(
+    # Total weighted observations (sum of weights)
+    Observations = round(sum(V7301, na.rm = TRUE), 0),
+
+    # Average age
+    Migrant_Woman_Age = round(weighted.mean(age_fem, w = V7301, na.rm = TRUE), 2),
+
+    # Weighted mean for occupation
+    Employed_Migrant = round(weighted.mean(ocupada_migrante_15, w = V7301, na.rm = TRUE), 2),
+
+    # Weighted mean for children
+    Children = round(weighted.mean(children, w = V7301, na.rm = TRUE), 2)
+  )
+# Step 2: Renomear códigos UF para nomes dos estados
+estatisticas_descritivas_30_49_1991$uf_nascim <- state_names[as.character(estatisticas_descritivas_30_49_1991$uf_nascim)]
+colnames(estatisticas_descritivas_30_49_1991)[1] <- "State"  # Renomear coluna para "State"
+
+# Step 3: Calcular médias gerais e adicioná-las como uma linha extra
+mean_row <- data_1991 %>%
+  summarise(
+    Observations = round(sum(V7301, na.rm = TRUE), 0),
+    Employed_Migrant = round(weighted.mean(ocupada_migrante_15, w = V7301, na.rm = TRUE), 2),
+    Children = round(weighted.mean(children, w = V7301, na.rm = TRUE), 2),
+    Migrant_Woman_Age = round(weighted.mean(age_fem, w = V7301, na.rm = TRUE), 2)
+  ) %>%
+  mutate(State = "Mean")
+
+# Combinar dados principais com a linha de médias
+stat_1991 <- bind_rows(estatisticas_descritivas_30_49_1991, mean_row)
+stat_1991 <- stat_1991 %>%
+  mutate(across(where(is.numeric), ~ round(.x, 2)))
+
+# Step 4: Gerar tabela LaTeX formatada
+latex_table <- xtable(stat_1991)
+
+# Imprimir saída LaTeX
+print(latex_table, type = "latex", include.rownames = FALSE)
+
+```
+
+### 1991 - main sample (destiny) - APPENDIX
+
+```{r 1991 main sample - destiny}
+destino_1991 <- data_1991 %>%
+  group_by(uf) %>%
+  summarise(
+    # Total weighted observations (sum of weights)
+    Observations = round(sum(V7301, na.rm = TRUE), 0),
+
+    # Average age
+    Migrant_Woman_Age = round(weighted.mean(age_fem, w = V7301, na.rm = TRUE), 2),
+
+    # Weighted mean for occupation
+    Employed_Migrant = round(weighted.mean(ocupada_migrante_15, w = V7301, na.rm = TRUE), 2),
+
+    # Weighted mean for children
+    Children = round(weighted.mean(children, w = V7301, na.rm = TRUE), 2)
+  )
+# Step 2: Renomear códigos UF para nomes dos estados
+destino_1991$uf <- state_names[as.character(destino_1991$uf)]
+colnames(destino_1991)[1] <- "State"  # Renomear coluna para "State"
+
+```
+
+### 1970 - cultural proxies
+
+```{r 1970 cultural proxies}
 
 # Step 1: Calculate statistics for each UF
 estatisticas_descritivas_30_49_1991 <- data_1991 %>%
@@ -2436,37 +2454,6 @@ print(latex_table, type = "latex", include.rownames = FALSE)
 ```{r stat desc 1991 - anos educ}
 
 ### 1991
-
-state_names <- c(
-  "11" = "Rondônia", 
-  "12" = "Acre", 
-  "13" = "Amazonas", 
-  "14" = "Roraima", 
-  "15" = "Pará", 
-  "16" = "Amapá", 
-  "17" = "Tocantins", 
-  "21" = "Maranhão",
-  "22" = "Piauí", 
-  "23" = "Ceará", 
-  "24" = "Rio Grande do Norte", 
-  "25" = "Paraíba", 
-  "26" = "Pernambuco", 
-  "27" = "Alagoas", 
-  "28" = "Sergipe", 
-  "29" = "Bahia",
-  "31" = "Minas Gerais", 
-  "32" = "Espírito Santo", 
-  "33" = "Rio de Janeiro", 
-  "35" = "São Paulo", 
-  "41" = "Paraná", 
-  "42" = "Santa Catarina", 
-  "43" = "Rio Grande do Sul", 
-  "50" = "Mato Grosso do Sul", 
-  "51" = "Mato Grosso", 
-  "52" = "Goiás", 
-  "53" = "Distrito Federal"
-)
-
 
 # Step 1: Calculate statistics for each UF
 estatisticas_descritivas_30_49 <- data_inc_educ_1991 %>%
@@ -2532,42 +2519,11 @@ print(latex_table, type = "latex", include.rownames = FALSE)
 ```
 
 
-### 2000 - main sample
+### 2000 - main sample (origin)
 
 ```{r stat desc 2000 - main sample}
 
 ### 2000
-
-state_names <- c(
-  "11" = "Rondônia", 
-  "12" = "Acre", 
-  "13" = "Amazonas", 
-  "14" = "Roraima", 
-  "15" = "Pará", 
-  "16" = "Amapá", 
-  "17" = "Tocantins", 
-  "21" = "Maranhão",
-  "22" = "Piauí", 
-  "23" = "Ceará", 
-  "24" = "Rio Grande do Norte", 
-  "25" = "Paraíba", 
-  "26" = "Pernambuco", 
-  "27" = "Alagoas", 
-  "28" = "Sergipe", 
-  "29" = "Bahia",
-  "31" = "Minas Gerais", 
-  "32" = "Espírito Santo", 
-  "33" = "Rio de Janeiro", 
-  "35" = "São Paulo", 
-  "41" = "Paraná", 
-  "42" = "Santa Catarina", 
-  "43" = "Rio Grande do Sul", 
-  "50" = "Mato Grosso do Sul", 
-  "51" = "Mato Grosso", 
-  "52" = "Goiás", 
-  "53" = "Distrito Federal"
-)
-
 
 # Step 1: Calculate statistics for each UF
 estatisticas_descritivas_30_49_2000 <- data_2000 %>%
@@ -2611,40 +2567,34 @@ latex_table <- xtable(stat_2000)  # Define 2 casas decimais nas colunas numéric
 # Imprimir saída LaTeX
 print(latex_table, type = "latex", include.rownames = FALSE)
 ```
+### 2000 - main sample (destiny) - APPENDIX
+
+```{r}
+# Step 1: Calculate statistics for each UF
+destino_2000 <- data_2000 %>%
+  group_by(uf) %>%
+  summarise(
+    # Total weighted observations (sum of weights)
+    Observations = round(sum(P001, na.rm = TRUE)),
+
+    # Average age
+    Migrant_Woman_Age = weighted.mean(age_fem, w = P001, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for occupation
+    Employed_Migrant = weighted.mean(ocupada_migrante_15, w = P001, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for children
+    Children = weighted.mean(children, w = P001, na.rm = TRUE),
+  )
+
+# Step 2: Renomear códigos UF para nomes dos estados
+destino_2000$uf <- state_names[as.character(destino_2000$uf)]
+colnames(destino_2000)[1] <- "State"  # Renomear coluna para "State"
+```
 
 ### 1980 - cultural proxies
 
 ```{r 1980 cultural proxies}
-state_names <- c(
-  "11" = "Rondônia", 
-  "12" = "Acre", 
-  "13" = "Amazonas", 
-  "14" = "Roraima", 
-  "15" = "Pará", 
-  "16" = "Amapá", 
-  "17" = "Tocantins", 
-  "21" = "Maranhão",
-  "22" = "Piauí", 
-  "23" = "Ceará", 
-  "24" = "Rio Grande do Norte", 
-  "25" = "Paraíba", 
-  "26" = "Pernambuco", 
-  "27" = "Alagoas", 
-  "28" = "Sergipe", 
-  "29" = "Bahia",
-  "31" = "Minas Gerais", 
-  "32" = "Espírito Santo", 
-  "33" = "Rio de Janeiro", 
-  "35" = "São Paulo", 
-  "41" = "Paraná", 
-  "42" = "Santa Catarina", 
-  "43" = "Rio Grande do Sul", 
-  "50" = "Mato Grosso do Sul", 
-  "51" = "Mato Grosso", 
-  "52" = "Goiás", 
-  "53" = "Distrito Federal"
-)
-
 
 # Step 1: Calculate statistics for each UF
 estatisticas_descritivas_30_49_2000 <- data_2000 %>%
@@ -2690,42 +2640,10 @@ latex_table <- xtable(cultural_1980)
 print(latex_table, type = "latex", include.rownames = FALSE)
 ```
 
-### 2010 - main sample
+### 2010 - main sample (origin)
 
 ```{r}
 ### 2010
-
-state_names <- c(
-  "11" = "Rondônia", 
-  "12" = "Acre", 
-  "13" = "Amazonas", 
-  "14" = "Roraima", 
-  "15" = "Pará", 
-  "16" = "Amapá", 
-  "17" = "Tocantins", 
-  "21" = "Maranhão",
-  "22" = "Piauí", 
-  "23" = "Ceará", 
-  "24" = "Rio Grande do Norte", 
-  "25" = "Paraíba", 
-  "26" = "Pernambuco", 
-  "27" = "Alagoas", 
-  "28" = "Sergipe", 
-  "29" = "Bahia",
-  "31" = "Minas Gerais", 
-  "32" = "Espírito Santo", 
-  "33" = "Rio de Janeiro", 
-  "35" = "São Paulo", 
-  "41" = "Paraná", 
-  "42" = "Santa Catarina", 
-  "43" = "Rio Grande do Sul", 
-  "50" = "Mato Grosso do Sul", 
-  "51" = "Mato Grosso", 
-  "52" = "Goiás", 
-  "53" = "Distrito Federal"
-)
-
-
 
 # Step 1: Calculate statistics for each UF
 estatisticas_descritivas_30_49_2010 <- data_2010 %>%
@@ -2770,39 +2688,34 @@ latex_table <- xtable(stat_2010)
 print(latex_table, type = "latex", include.rownames = FALSE)
 
 ```
+### 2010 - main sample (destiny) - APPENDIX
+
+```{r}
+# Step 1: Calculate statistics for each UF
+destino_2010 <- data_2010 %>%
+  group_by(UF) %>%
+  summarise(
+    # Total weighted observations (sum of weights)
+    Observations = round(sum(peso_pess, na.rm = TRUE)),
+
+    # Average age
+    Migrant_Woman_Age = weighted.mean(age_fem, w = peso_pess, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for occupation
+    Employed_Migrant = weighted.mean(ocup_migrante, w = peso_pess, na.rm = TRUE),
+
+    # Weighted mean and standard deviation for children
+    Children = weighted.mean(children, w = peso_pess, na.rm = TRUE),
+  )
+
+# Step 2: Renomear códigos UF para nomes dos estados
+destino_2010$UF <- state_names[as.character(destino_2010$UF)]
+colnames(destino_2010)[1] <- "State"  # Renomear coluna para "State"
+```
+
 ### 1991 - cultural proxies
 
 ```{r}
-state_names <- c(
-  "11" = "Rondônia", 
-  "12" = "Acre", 
-  "13" = "Amazonas", 
-  "14" = "Roraima", 
-  "15" = "Pará", 
-  "16" = "Amapá", 
-  "17" = "Tocantins", 
-  "21" = "Maranhão",
-  "22" = "Piauí", 
-  "23" = "Ceará", 
-  "24" = "Rio Grande do Norte", 
-  "25" = "Paraíba", 
-  "26" = "Pernambuco", 
-  "27" = "Alagoas", 
-  "28" = "Sergipe", 
-  "29" = "Bahia",
-  "31" = "Minas Gerais", 
-  "32" = "Espírito Santo", 
-  "33" = "Rio de Janeiro", 
-  "35" = "São Paulo", 
-  "41" = "Paraná", 
-  "42" = "Santa Catarina", 
-  "43" = "Rio Grande do Sul", 
-  "50" = "Mato Grosso do Sul", 
-  "51" = "Mato Grosso", 
-  "52" = "Goiás", 
-  "53" = "Distrito Federal"
-)
-
 
 # Step 1: Calculate statistics for each UF
 estatisticas_descritivas_30_49_2010 <- data_2010 %>%

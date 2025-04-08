@@ -92,7 +92,7 @@ censo_1991 <- read_dta("D:/1_migration/1_datasets_migrants/censo/nova/censo/1991
 
 # uf: 30-39
 econ_ativa_uf <- censo_1991 |>
-  filter((V0358 %in% c(10,1,2) ) & V3072 >= 30 & V3072 <= 39 & V0301 == 2) |>
+  filter((V0358 %in% c(10,1,2)| V0345 %in% c(1,2)|(V0345 == 3 & V0358 %in% c(1,2))) & V3072 >= 30 & V3072 <= 39 & V0301 == 2) |>
   group_by(UF) |> 
   summarise(soma_eco_ativa = sum(V7301, na.rm = TRUE))
 
@@ -117,18 +117,22 @@ result
 # e com o anuario estatistico do brasil 1994 (p.266) PNAD
 # http://memoria.org.br/pub/meb000000350/90000/90000053.pdf
 
+# https://biblioteca.ibge.gov.br/visualizacao/periodicos/69/cd_1970_v1_br.pdf
+
 # gera base final
 mulher_ativa_por_uf_1991 <- mulher_ativa_por_uf_1991 |>
   rename(uf_nascim = UF) |> 
   dplyr::select(-soma_eco_ativa, -soma_idade_ativa) 
 
+# write_xlsx(mulher_ativa_por_uf_1991, 
+#   "D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_30-39_1991.xlsx")
 write_xlsx(mulher_ativa_por_uf_1991, 
-  "D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_30-39_1991.xlsx")
+  "D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_30-39_1991_v2.xlsx")
 
 #-------------------------------------------------------------------------------
 # uf: 40-49
 econ_ativa_uf <- censo_1991 |>
-  filter((V0358 %in% c(10,1,2) ) & V3072 >= 40 & V3072 <= 49 & V0301 == 2) |>
+  filter((V0358 %in% c(10,1,2)| V0345 %in% c(1,2)|(V0345 == 3 & V0358 %in% c(1,2))) & V3072 >= 40 & V3072 <= 49 & V0301 == 2) |>
   group_by(UF) |> 
   summarise(soma_eco_ativa = sum(V7301, na.rm = TRUE))
 
@@ -152,12 +156,15 @@ mulher_ativa_por_uf_1991 <- mulher_ativa_por_uf_1991 |>
   rename(uf_nascim = UF) |> 
   dplyr::select(-soma_eco_ativa, -soma_idade_ativa) 
 
+# write_xlsx(mulher_ativa_por_uf_1991, 
+#   "D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_40-49_1991.xlsx")
 write_xlsx(mulher_ativa_por_uf_1991, 
-  "D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_40-49_1991.xlsx")
+  "D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_40-49_1991_v2.xlsx")
+
 #-------------------------------------------------------------------------------
 # uf: 30-49
 econ_ativa_uf <- censo_1991 |>
-  filter((V0358 %in% c(10,1,2) ) & V3072 >= 30 & V3072 <= 49 & V0301 == 2) |>
+  filter((V0358 %in% c(10,1,2)| V0345 %in% c(1,2)|(V0345 == 3 & V0358 %in% c(1,2))) & V3072 >= 30 & V3072 <= 49 & V0301 == 2) |>
   group_by(UF) |> 
   summarise(soma_eco_ativa = sum(V7301, na.rm = TRUE))
 
@@ -181,13 +188,16 @@ mulher_ativa_por_uf_1991 <- mulher_ativa_por_uf_1991 |>
   rename(uf_nascim = UF) |> 
   dplyr::select(-soma_eco_ativa, -soma_idade_ativa) 
 
+# write_xlsx(mulher_ativa_por_uf_1991, 
+#   "D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_30-49_1991.xlsx")
 write_xlsx(mulher_ativa_por_uf_1991, 
-  "D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_30-49_1991.xlsx")
+  "D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_30-49_1991_v2.xlsx")
+
 #-------------------------------------------------------------------------------
 # mais de 10 anos
 # uf
 econ_ativa_uf <- censo_1991 |>
-  filter((V0358 %in% c(10,1,2) ) & V3072 >= 10 & V0301 == 2) |>
+  filter((V0358 %in% c(10,1,2)| V0345 %in% c(1,2)|(V0345 == 3 & V0358 %in% c(1,2))) & V3072 >= 10 & V0301 == 2) |>
   group_by(UF) |> 
   summarise(soma_eco_ativa = sum(V7301, na.rm = TRUE))
 
@@ -211,9 +221,10 @@ mulher_ativa_por_uf_1991 <- mulher_ativa_por_uf_1991 |>
   rename(uf_nascim = UF) |> 
   dplyr::select(-soma_eco_ativa, -soma_idade_ativa) 
 
+# write_xlsx(mulher_ativa_por_uf_1991, 
+#   "D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_10-mais_1991.xlsx")
 write_xlsx(mulher_ativa_por_uf_1991, 
-  "D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_10-mais_1991.xlsx")
-
+  "D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_10-mais_1991_v2.xlsx")
 
 # ------------------------------------------------------------------------------
 # 1981 PNAD
@@ -601,12 +612,15 @@ write_xlsx(mulher_ativa_por_uf_1970,
 censo_1960_corrigido <- read_csv("D:/IBGE_1960/Censo 1960 1.27pct CEM/censo1960_corrigido/Censo.1960.brasil.pessoas.amostra.1.27porcento.csv")
 
 censo_1960_pess_ipmus <- read_dta("D:/IBGE_1960/Censo 1960 5pct IPUMS/censo1960pes_ipums.dta")
-
+gc()
 censo_1960_dom_ipmus <- read_dta("D:/IBGE_1960/Censo 1960 5pct IPUMS/censo1960dom_ipums.dta")
+gc()
 
 # create censo_1960 with merged data from id and hh level
 censo_1960_ipmus <- merge(censo_1960_pess_ipmus, censo_1960_dom_ipmus, by = c("pernum", "serial", "sample"))
 
+rm(censo_1960_pess_ipmus, censo_1960_dom_ipmus)
+gc()
 
 # Verificar se as colunas com o mesmo nome, mas com .x e .y, são iguais
 comparar_variaveis <- function(data, var_prefix) {
@@ -683,7 +697,7 @@ write_xlsx(mulher_ativa_por_uf_1960,
   "D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_30-39_1960.xlsx")
 
 
-# statebr: more than 10 years
+# statebr: more than 10 years----
 econ_ativa_uf <- censo_1960_ipmus |>
   filter(empstat %in% c(1,2), age >= 10, sex == 2) |>
   group_by(statebr) |> 
@@ -712,6 +726,34 @@ mulher_ativa_por_uf_1960 <- mulher_ativa_por_uf_1960 |>
 write_xlsx(mulher_ativa_por_uf_1960, 
   "D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_10-mais_1960.xlsx")
 
+# statebr: more than 15 years----
+econ_ativa_uf <- censo_1960_ipmus |>
+  filter(empstat %in% c(1,2), age >= 15, sex == 2) |>
+  group_by(statebr) |> 
+  summarise(soma_eco_ativa = sum(wtper.x, na.rm = TRUE))
+
+idade_ativa_uf <- censo_1960_ipmus |> 
+  filter(age >= 15, sex == 2) |> 
+  group_by(statebr) |> 
+  summarise(soma_idade_ativa = sum(wtper.x, na.rm = TRUE))
+
+mulher_ativa_por_uf_1960 <- econ_ativa_uf |>
+  left_join(idade_ativa_uf, by = "statebr") |>
+  mutate(lfp_uf_1960 = soma_eco_ativa / soma_idade_ativa)
+
+somas_uf <- colSums(dplyr::select(mulher_ativa_por_uf_1960, starts_with("soma_")), na.rm = TRUE)
+somas_uf
+
+result <- somas_uf["soma_eco_ativa"] / somas_uf["soma_idade_ativa"]
+result
+
+# final dt
+mulher_ativa_por_uf_1960 <- mulher_ativa_por_uf_1960 |>
+  rename(uf_nascim = statebr) |> 
+  dplyr::select(-soma_eco_ativa, -soma_idade_ativa) 
+
+write_xlsx(mulher_ativa_por_uf_1960, 
+  "D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_15-mais_1960.xlsx")
 
 #-----------------------------------------------------------------------------
 censo_pess_cem_1960 <- read_dta("D:/IBGE_1960/Censo 1960 1.27pct CEM/novo/censo1960pes.dta")
@@ -778,21 +820,14 @@ censo_pess_cem_1960 <- censo_pess_cem_1960 %>%
   mutate(v220 = ifelse(is.na(v220), 999, v220))
 
 
-
-
-
-
-
-
-
 # uf: 30-49
 econ_ativa_uf <- censo_pess_cem_1960 |>
-  filter(v220 == 3, v204b >= 30 & v204b <= 49, v202 %in% c(2,4,6)) |>
+  filter((v224 %in% c(0,5,6,7,8,9)|v223%in%c(2,3,4,5)|v220 %in% c(3,8)), v204b >= 30 & v204b <= 49, v202 %in% c(2)) |> 
   group_by(uf_atual) |> 
   summarise(soma_eco_ativa = sum(cem_wgt, na.rm = TRUE))
 
 idade_ativa_uf <- censo_pess_cem_1960 |> 
-  filter(v204b >= 30 & v204b <= 49, v202 %in% c(2,4,6)) |> 
+  filter(v204b >= 30 & v204b <= 49, v202 %in% c(2)) |> 
   group_by(uf_atual) |> 
   summarise(soma_idade_ativa = sum(cem_wgt, na.rm = TRUE))
 
@@ -816,7 +851,7 @@ write_xlsx(mulher_ativa_por_uf_1960,
 
 # uf_atual: 30-39
 econ_ativa_uf <- censo_pess_cem_1960 |>
-  filter(v220 == 3, v204b >= 30 & v204b <= 39, v202 %in% c(2,4,6)) |>
+  filter((v224 %in% c(0,5,6,7,8,9)|v223%in%c(2,3,4,5)|v220 %in% c(3,8)), v204b >= 30 & v204b <= 39, v202 %in% c(2)) |>
   group_by(uf_atual) |> 
   summarise(soma_eco_ativa = sum(cem_wgt, na.rm = TRUE))
 
@@ -846,7 +881,7 @@ write_xlsx(mulher_ativa_por_uf_1960,
 
 # uf_atual: more than 10 years
 econ_ativa_uf <- censo_pess_cem_1960 |>
-  filter((v223 %in% c(2,3,4,5)| v220 == 3| v220 == 2| v220 == 8), v204b >= 10, v202 %in% c(2,4)) |>
+  filter((v224 %in% c(0,5,6,7,8,9)|v223%in%c(2,3,4,5)|v220 %in% c(3,8)), v204b >= 10, v202 %in% c(2)) |>
   group_by(uf_atual) |> 
   summarise(soma_eco_ativa = sum(cem_wgt, na.rm = TRUE))
 
@@ -873,17 +908,33 @@ mulher_ativa_por_uf_1960 <- mulher_ativa_por_uf_1960 |>
 write_xlsx(mulher_ativa_por_uf_1960, 
   "D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_10-mais_1960_cem.xlsx")
 
+# final dt: 15 years+ ----
+econ_ativa_uf <- censo_pess_cem_1960 |>
+  filter((v224 %in% c(0,5,6,7,8,9)|v223%in%c(2,3,4,5)|v220 %in% c(3,8)), v204b >= 15, v202 %in% c(2)) |>
+  group_by(uf_atual) |> 
+  summarise(soma_eco_ativa = sum(cem_wgt, na.rm = TRUE))
 
+idade_ativa_uf <- censo_pess_cem_1960 |> 
+  filter(v204b >= 15, v202 %in% c(2,4)) |> 
+  group_by(uf_atual) |> 
+  summarise(soma_idade_ativa = sum(cem_wgt, na.rm = TRUE))
 
+mulher_ativa_por_uf_1960 <- econ_ativa_uf |>
+  left_join(idade_ativa_uf, by = "uf_atual") |>
+  mutate(lfp_uf_1960 = soma_eco_ativa / soma_idade_ativa)
 
+somas_uf <- colSums(dplyr::select(mulher_ativa_por_uf_1960, starts_with("soma_")), na.rm = TRUE)
+somas_uf
 
+result <- somas_uf["soma_eco_ativa"] / somas_uf["soma_idade_ativa"]
+result
 
+# final dt
+mulher_ativa_por_uf_1960 <- mulher_ativa_por_uf_1960 |>
+  rename(uf_nascim = uf_atual) |> 
+  dplyr::select(-soma_eco_ativa, -soma_idade_ativa) 
 
-
-
-
-
-
-
+write_xlsx(mulher_ativa_por_uf_1960, 
+  "D:/1_migration/1_datasets_migrants/lfp/censo_lfp_uf_15-mais_1960_cem.xlsx")
 
 

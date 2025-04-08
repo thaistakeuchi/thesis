@@ -216,6 +216,7 @@ sm_1991 <- read_xlsx("D:/1_migration/1_datasets_migrants/salario/salario_medio_3
 
 data_inc_educ_2010 <- merge(data_2010, m_educ_1991, by = "uf_nascim")
 data_inc_educ_2010 <- merge(data_inc_educ_2010, sm_1991, by = "uf_nascim")
+
 ```
 
 # CENSUS - per state
